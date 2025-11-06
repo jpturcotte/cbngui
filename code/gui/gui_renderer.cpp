@@ -2,33 +2,14 @@
 #include <iostream>
 #include <cstring>
 
-// Dear ImGui headers - in a real implementation, these would be properly included
-// For this example, we'll use forward declarations and comments to indicate the required headers
-/*
+// This is the main implementation file for the GUIRenderer class.
+// It uses the PIMPL idiom to hide implementation details from the header file.
+// It also includes the necessary headers for Dear ImGui and the SDL2 backend.
+
+// Use proper ImGui headers
 #include "imgui.h"
 #include "backends/imgui_impl_sdl2.h"
-#include "backends/imgui_impl_sdlrenderer.h"
-*/
-
-// Forward declarations for Dear ImGui (in real implementation, include proper headers)
-struct ImGuiContext;
-struct ImGuiIO;
-struct ImDrawData;
-
-// Placeholder structures for ImGui backends (in real implementation, these would be from the actual headers)
-namespace ImGui_ImplSDL2 {
-    bool Init(SDL_Window* window);
-    void Shutdown();
-    void NewFrame();
-    bool ProcessEvent(const SDL_Event* event);
-}
-
-namespace ImGui_ImplSDLRenderer {
-    bool Init(SDL_Renderer* renderer);
-    void Shutdown();
-    void NewFrame();
-    void RenderDrawData(ImDrawData* draw_data);
-}
+#include "backends/imgui_impl_sdlrenderer2.h"
 
 /**
  * @brief PIMPL implementation structure for GUIRenderer
@@ -109,29 +90,6 @@ struct GUIRenderer::Impl {
         // Configure IO settings
         io->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
         io->BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
-        
-        // Keyboard mapping
-        io->KeyMap[ImGuiKey_Tab] = SDLK_TAB;
-        io->KeyMap[ImGuiKey_LeftArrow] = SDLK_LEFT;
-        io->KeyMap[ImGuiKey_RightArrow] = SDLK_RIGHT;
-        io->KeyMap[ImGuiKey_UpArrow] = SDLK_UP;
-        io->KeyMap[ImGuiKey_DownArrow] = SDLK_DOWN;
-        io->KeyMap[ImGuiKey_PageUp] = SDLK_PAGEUP;
-        io->KeyMap[ImGuiKey_PageDown] = SDLK_PAGEDOWN;
-        io->KeyMap[ImGuiKey_Home] = SDLK_HOME;
-        io->KeyMap[ImGuiKey_End] = SDLK_END;
-        io->KeyMap[ImGuiKey_Insert] = SDLK_INSERT;
-        io->KeyMap[ImGuiKey_Delete] = SDLK_DELETE;
-        io->KeyMap[ImGuiKey_Backspace] = SDLK_BACKSPACE;
-        io->KeyMap[ImGuiKey_Space] = SDLK_SPACE;
-        io->KeyMap[ImGuiKey_Enter] = SDLK_RETURN;
-        io->KeyMap[ImGuiKey_Escape] = SDLK_ESCAPE;
-        io->KeyMap[ImGuiKey_A] = SDLK_a;
-        io->KeyMap[ImGuiKey_C] = SDLK_c;
-        io->KeyMap[ImGuiKey_V] = SDLK_v;
-        io->KeyMap[ImGuiKey_X] = SDLK_x;
-        io->KeyMap[ImGuiKey_Y] = SDLK_y;
-        io->KeyMap[ImGuiKey_Z] = SDLK_z;
     }
     
     /**
@@ -183,8 +141,8 @@ bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float d
     pImpl_->renderer = renderer;
     
     // Create ImGui context
-    // IMGUI_CHECKVERSION();  // Would be called from actual ImGui header
-    pImpl_->context = nullptr; // ImGui::CreateContext(); // Placeholder
+    IMGUI_CHECKVERSION();
+    pImpl_->context = ImGui::CreateContext();
     
     if (!pImpl_->context) {
         pImpl_->LogError("Failed to create ImGui context");
@@ -192,7 +150,7 @@ bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float d
     }
     
     pImpl_->has_context = true;
-    pImpl_->io = nullptr; // ImGui::GetIO(); // Placeholder
+    pImpl_->io = &ImGui::GetIO();
     
     if (!pImpl_->io) {
         pImpl_->LogError("Failed to get ImGui IO");
@@ -203,15 +161,15 @@ bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float d
     pImpl_->SetupImGuiConfig();
     
     // Initialize SDL2 backend for ImGui
-    if (!ImGui_ImplSDL2::Init(window)) {
+    if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer)) {
         pImpl_->LogError("Failed to initialize ImGui SDL2 backend");
         return false;
     }
     
     // Initialize SDL Renderer backend for ImGui
-    if (!ImGui_ImplSDLRenderer::Init(renderer)) {
+    if (!ImGui_ImplSDLRenderer2_Init(renderer)) {
         pImpl_->LogError("Failed to initialize ImGui SDL Renderer backend");
-        ImGui_ImplSDL2::Shutdown();
+        ImGui_ImplSDL2_Shutdown();
         return false;
     }
     
@@ -222,18 +180,19 @@ bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float d
     return true;
 }
 
+// Shuts down the GUI renderer and cleans up all resources.
 void GUIRenderer::Shutdown() {
     if (!pImpl_->is_initialized) {
         return;
     }
     
     // Shutdown backends
-    ImGui_ImplSDLRenderer::Shutdown();
-    ImGui_ImplSDL2::Shutdown();
+    ImGui_ImplSDLRenderer2_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
     
     // Destroy ImGui context
     if (pImpl_->has_context && pImpl_->context) {
-        // ImGui::DestroyContext(); // Placeholder
+        ImGui::DestroyContext(pImpl_->context);
         pImpl_->context = nullptr;
     }
     
@@ -250,11 +209,9 @@ void GUIRenderer::Update() {
     }
     
     // Start new ImGui frame
-    ImGui_ImplSDLRenderer::NewFrame();
-    ImGui_ImplSDL2::NewFrame();
-    
-    // Begin ImGui frame (placeholder - would be ImGui::NewFrame())
-    // ImGui::NewFrame();
+    ImGui_ImplSDLRenderer2_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
 }
 
 void GUIRenderer::Render() {
@@ -262,12 +219,12 @@ void GUIRenderer::Render() {
         return;
     }
     
-    // Render ImGui draw data (placeholder - actual implementation would call ImGui::Render())
-    // ImGui::Render();
-    // ImDrawData* draw_data = ImGui::GetDrawData();
-    // if (draw_data) {
-    //     ImGui_ImplSDLRenderer::RenderDrawData(draw_data);
-    // }
+    // Render ImGui draw data
+    ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    if (draw_data) {
+        ImGui_ImplSDLRenderer2_RenderDrawData(draw_data, pImpl_->renderer);
+    }
 }
 
 bool GUIRenderer::HandleEvent(const SDL_Event& event) {
@@ -276,7 +233,10 @@ bool GUIRenderer::HandleEvent(const SDL_Event& event) {
     }
     
     // Process event through ImGui
-    return ImGui_ImplSDL2::ProcessEvent(&event);
+    ImGui_ImplSDL2_ProcessEvent(&event);
+
+    // Check if ImGui wants to capture input
+    return pImpl_->io && (pImpl_->io->WantCaptureMouse || pImpl_->io->WantCaptureKeyboard);
 }
 
 void GUIRenderer::OnWindowResized(int width, int height) {
@@ -317,9 +277,9 @@ void GUIRenderer::SetDockingEnabled(bool enabled) {
     
     if (pImpl_->io) {
         if (enabled) {
-            pImpl_->io->BackendFlags |= ImGuiBackendFlags_DockingEnabled;
+            pImpl_->io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         } else {
-            pImpl_->io->BackendFlags &= ~ImGuiBackendFlags_DockingEnabled;
+            pImpl_->io->ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
         }
     }
 }
@@ -329,11 +289,9 @@ void GUIRenderer::SetViewportsEnabled(bool enabled) {
     
     if (pImpl_->io) {
         if (enabled) {
-            pImpl_->io->BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;
-            pImpl_->io->BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
+            pImpl_->io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         } else {
-            pImpl_->io->BackendFlags &= ~ImGuiBackendFlags_PlatformHasViewports;
-            pImpl_->io->BackendFlags &= ~ImGuiBackendFlags_RendererHasViewports;
+            pImpl_->io->ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
         }
     }
 }
@@ -359,8 +317,10 @@ void GUIRenderer::RebuildFontAtlas() {
         return;
     }
     
-    // In real implementation, this would trigger font atlas rebuild
-    // ImGui::GetIO().Fonts->Clear();
-    // ImGui::GetIO().Fonts->AddFontDefault();
-    // ImGui::GetIO().Fonts->Build();
+    // Rebuild font atlas
+    if (pImpl_->io && pImpl_->io->Fonts) {
+        pImpl_->io->Fonts->Clear();
+        pImpl_->io->Fonts->AddFontDefault();
+        pImpl_->io->Fonts->Build();
+    }
 }

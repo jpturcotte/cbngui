@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 project(CataclysmBN_GUI)
 
+option(BUILD_TESTING "Build the tests" ON)
+
+find_package(SDL2 REQUIRED)
+
 # GUI Manager Library
 set(GUI_SOURCES
     gui_manager.cpp
     gui_renderer.cpp
+    libs/imgui/imgui.cpp
+    libs/imgui/imgui_draw.cpp
+    libs/imgui/imgui_tables.cpp
+    libs/imgui/imgui_widgets.cpp
+    libs/imgui/backends/imgui_impl_sdl2.cpp
+    libs/imgui/backends/imgui_impl_sdlrenderer2.cpp
 )
 
 set(GUI_HEADERS
@@ -22,19 +32,14 @@ target_compile_features(cataclysm_gui PUBLIC cxx_std_17)
 target_include_directories(cataclysm_gui PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${SDL2_INCLUDE_DIRS}
+    libs/imgui
+    libs/imgui/backends
 )
 
 # Link dependencies
 target_link_libraries(cataclysm_gui
-    ${SDL2_LIBRARIES}
+    SDL2::SDL2
 )
-
-# In a real project, you would also link Dear ImGui libraries
-# target_link_libraries(cataclysm_gui
-#     imgui
-#     imgui_sdl2_binding
-#     imgui_sdlrenderer_binding
-# )
 
 # Set compiler-specific flags
 if(MSVC)
@@ -50,8 +55,6 @@ target_compile_definitions(cataclysm_gui PUBLIC
 
 # Set library properties
 set_target_properties(cataclysm_gui PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION 1
     OUTPUT_NAME "cataclysm_gui"
 )
 
@@ -71,14 +74,17 @@ install(FILES ${GUI_HEADERS}
 # Export the library
 if(BUILD_TESTING)
     # Add test target (in a full implementation)
-    add_executable(gui_test test_gui_manager.cpp)
-    target_link_libraries(gui_test cataclysm_gui)
-    target_include_directories(gui_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    
-    # Link required libraries for test
-    target_link_libraries(gui_test
-        ${SDL2_LIBRARIES}
+    add_executable(test_gui test_gui_manager.cpp)
+    target_sources(test_gui PRIVATE
+        "libs/imgui/imgui_demo.cpp"
+    )
+    target_link_libraries(test_gui cataclysm_gui SDL2::SDL2)
+    target_include_directories(test_gui PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${SDL2_INCLUDE_DIRS}
+        libs/imgui
+        libs/imgui/backends
     )
     
-    add_test(NAME gui_manager_test COMMAND gui_test)
+    add_test(NAME gui_manager_test COMMAND test_gui)
 endif()

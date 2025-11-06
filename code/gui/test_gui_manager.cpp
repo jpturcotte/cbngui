@@ -1,5 +1,6 @@
 #include "gui_manager.h"
 #include "gui_renderer.h"
+#include "imgui.h"
 #include <iostream>
 #include <memory>
 #include <chrono>
@@ -17,7 +18,7 @@
  */
 class GUIExample {
 public:
-    GUIExample() : gui_manager_(), is_running_(true) {}
+    GUIExample() : gui_manager_(std::make_unique<GUIManager>()), is_running_(true) {}
     
     bool Initialize() {
         // Initialize SDL2
@@ -56,24 +57,24 @@ public:
         config.ini_filename = "imgui_test.ini";
         
         // Initialize GUI Manager
-        if (!gui_manager_.Initialize(window_, renderer_, config)) {
-            std::cerr << "Failed to initialize GUI Manager: " << gui_manager_.GetLastError() << std::endl;
+        if (!gui_manager_->Initialize(window_, renderer_, config)) {
+            std::cerr << "Failed to initialize GUI Manager: " << gui_manager_->GetLastError() << std::endl;
             SDL_DestroyRenderer(renderer_);
             SDL_DestroyWindow(window_);
             return false;
         }
         
         // Register callbacks
-        gui_manager_.RegisterRedrawCallback([this]() {
+        gui_manager_->RegisterRedrawCallback([this]() {
             std::cout << "GUI redraw requested" << std::endl;
         });
         
-        gui_manager_.RegisterResizeCallback([this](int width, int height) {
+        gui_manager_->RegisterResizeCallback([this](int width, int height) {
             std::cout << "Window resized to: " << width << "x" << height << std::endl;
         });
         
         // Open the GUI overlay
-        gui_manager_.Open();
+        gui_manager_->Open();
         
         return true;
     }
@@ -110,7 +111,12 @@ public:
             last_time = std::chrono::high_resolution_clock::now();
             
             // Update GUI Manager
-            gui_manager_.Update();
+            gui_manager_->Update();
+
+            // Show demo window
+            if (gui_manager_->IsOpen()) {
+                ImGui::ShowDemoWindow();
+            }
             
             // Clear renderer
             SDL_SetRenderDrawColor(renderer_, 32, 32, 32, 255);
@@ -120,7 +126,7 @@ public:
             RenderGameScene();
             
             // Render GUI overlay
-            gui_manager_.Render();
+            gui_manager_->Render();
             
             // Present the frame
             SDL_RenderPresent(renderer_);
@@ -130,7 +136,7 @@ public:
     void Shutdown() {
         std::cout << "Shutting down GUI Manager..." << std::endl;
         
-        gui_manager_.Shutdown();
+        gui_manager_->Shutdown();
         
         if (renderer_) {
             SDL_DestroyRenderer(renderer_);
@@ -155,13 +161,13 @@ private:
             case SDL_KEYDOWN:
                 switch (event.key.keysym.sym) {
                     case SDLK_o:
-                        gui_manager_.Open();
+                        gui_manager_->Open();
                         break;
                     case SDLK_c:
-                        gui_manager_.Close();
+                        gui_manager_->Close();
                         break;
                     case SDLK_e:
-                        gui_manager_.SetEnabled(!gui_manager_.IsEnabled());
+                        gui_manager_->SetEnabled(!gui_manager_->IsEnabled());
                         break;
                     case SDLK_q:
                         is_running_ = false;
@@ -173,13 +179,13 @@ private:
                 
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-                    gui_manager_.OnWindowResized(event.window.data1, event.window.data2);
+                    gui_manager_->OnWindowResized(event.window.data1, event.window.data2);
                 }
                 break;
         }
         
         // Always let GUI Manager handle events for input routing
-        gui_manager_.HandleEvent(event);
+        gui_manager_->HandleEvent(event);
     }
     
     void RenderGameScene() {

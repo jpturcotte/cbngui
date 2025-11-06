@@ -1,0 +1,12 @@
+# Build directories
+build/
+code/gui/build/
+
+# IDE files
+.vscode/
+.idea/
+
+# Other
+*.swp
+*.swo
+*~

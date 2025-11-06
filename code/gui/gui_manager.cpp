@@ -4,6 +4,9 @@
 #include <cstring>
 #include <iostream>
 
+// This is the main implementation file for the GUIManager class.
+// It uses the PIMPL idiom to hide implementation details from the header file.
+
 /**
  * @brief PIMPL implementation structure for GUIManager
  * 
@@ -117,8 +120,16 @@ bool GUIManager::Initialize(SDL_Window* window, SDL_Renderer* renderer, const Co
     return true;
 }
 
+// This is the overloaded Initialize method that takes no config.
+// It calls the main Initialize method with a default-constructed Config object.
+bool GUIManager::Initialize(SDL_Window* window, SDL_Renderer* renderer)
+{
+    return Initialize(window, renderer, Config());
+}
+
+// This is the internal Initialize method that does the actual work of setting up the GUI.
 bool GUIManager::InitializeInternal(const Config& config) {
-    // Check if we can run graphical GUI
+    // Check if we can run graphical GUI.
     if (!IsGraphicalBuild()) {
         pImpl_->LogError("Graphical GUI not available in ASCII build");
         return false;
@@ -146,6 +157,7 @@ bool GUIManager::InitializeInternal(const Config& config) {
     return true;
 }
 
+// Shuts down the GUI manager and cleans up all resources.
 void GUIManager::Shutdown() {
     if (!pImpl_->is_initialized) {
         return;
@@ -342,7 +354,7 @@ bool GUIManager::ValidateConfig(const Config& config) const {
     return true;
 }
 
-void GUIManager::LogError(const std::string& error) {
+void GUIManager::LogError(const std::string& error) const {
     pImpl_->LogError(error);
 }
 
