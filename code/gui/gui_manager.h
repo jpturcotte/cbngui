@@ -31,6 +31,8 @@ public:
         float dpi_scale = 1.0f;                 /**< DPI scaling factor */
         bool minimize_pause = true;             /**< Pause on window minimize */
         std::string ini_filename;               /**< Custom ImGui ini filename (null for default) */
+
+        Config() = default;
     };
     
     /**
@@ -41,7 +43,8 @@ public:
      * @param config Configuration parameters
      * @return true if initialization successful, false otherwise
      */
-    bool Initialize(SDL_Window* window, SDL_Renderer* renderer, const Config& config = Config());
+    bool Initialize(SDL_Window* window, SDL_Renderer* renderer, const Config& config);
+    bool Initialize(SDL_Window* window, SDL_Renderer* renderer);
     
     /**
      * @brief Shutdown the GUI manager and clean up resources
@@ -149,7 +152,7 @@ private:
     /**
      * @brief Log error and set last error message
      */
-    void LogError(const std::string& error);
+    void LogError(const std::string& error) const;
     
     /**
      * @brief Check if system is in graphical build mode
