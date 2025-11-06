@@ -252,10 +252,10 @@ void GUIRenderer::SetIniFilename(const std::string& filename) {
     pImpl_->ini_filename = filename;
     
     if (pImpl_->io) {
-        if (filename.empty()) {
+        if (pImpl_->ini_filename.empty()) {
             pImpl_->io->IniFilename = nullptr;
         } else {
-            pImpl_->io->IniFilename = filename.c_str();
+            pImpl_->io->IniFilename = pImpl_->ini_filename.c_str();
         }
     }
 }
@@ -264,10 +264,10 @@ void GUIRenderer::SetLogFilename(const std::string& filename) {
     pImpl_->log_filename = filename;
     
     if (pImpl_->io) {
-        if (filename.empty()) {
+        if (pImpl_->log_filename.empty()) {
             pImpl_->io->LogFilename = nullptr;
         } else {
-            pImpl_->io->LogFilename = filename.c_str();
+            pImpl_->io->LogFilename = pImpl_->log_filename.c_str();
         }
     }
 }

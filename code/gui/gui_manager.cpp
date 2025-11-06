@@ -246,12 +246,9 @@ bool GUIManager::HandleEvent(const SDL_Event& event) {
     if (pImpl_->overlay_has_focus && pImpl_->gui_renderer) {
         bool consumed = pImpl_->gui_renderer->HandleEvent(event);
         
-        // If event not consumed and pass-through is enabled, let game handle it
-        if (!consumed && pImpl_->pass_through_enabled) {
-            return false;  // Pass to game
-        }
-        
-        return consumed;  // Return whether GUI consumed the event
+        // If GUI consumed event, always return true.
+        // If pass-through is disabled, return true to block event from game.
+        return consumed || !pImpl_->pass_through_enabled;
     }
     
     return false;  // Overlay not active, pass to game
