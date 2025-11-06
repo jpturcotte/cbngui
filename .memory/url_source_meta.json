@@ -1,0 +1,114 @@
+{
+  "_source_id": 15,
+  "sources": {
+    "GUI Framework Analysis for Cataclysm-BN Integration": {
+      "https://github.com/cataclysmbnteam/Cataclysm-BN": {
+        "id": 1,
+        "publisher": "Cataclysm-BN Team",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN",
+        "title": "Cataclysm: Bright Nights GitHub Repository",
+        "info": "Technical architecture details: 92.3% C++, SDL2-based GUI system with SDL2_image, SDL2_ttf, and SDL2_mixer libraries. Latest release v0.8.0 (April 2025) with active development and 1351 contributors."
+      },
+      "https://github.com/raysan5/raygui": {
+        "id": 2,
+        "publisher": "Ramon Santamaria (raysan5)",
+        "url": "https://github.com/raysan5/raygui",
+        "title": "raygui: Immediate Mode GUI Library",
+        "info": "Simple, easy-to-use immediate-mode GUI library with 25+ controls, powerful styling system, and single-file header implementation. 4.4k GitHub stars, 354 forks, designed for raylib but adaptable to other engines."
+      },
+      "https://github.com/cegui/cegui": {
+        "id": 3,
+        "publisher": "CEGUI Development Team",
+        "url": "https://github.com/cegui/cegui",
+        "title": "Crazy Eddie's GUI Library",
+        "info": "Versatile, fast C++ GUI library for games with modular architecture, minimal dependencies (only GLM required), multi-platform support. Performance: 3000+ FPS in release mode, used in big games like Torchlight 1&2."
+      },
+      "https://martin-fieber.de/blog/gui-development-with-cpp-sdl2-and-dear-imgui/": {
+        "id": 4,
+        "publisher": "Martin Fieber",
+        "url": "https://martin-fieber.de/blog/gui-development-with-cpp-sdl2-and-dear-imgui/",
+        "title": "GUI Development with C++, SDL2, and Dear ImGui",
+        "info": "Comprehensive integration guide for Dear ImGui with SDL2, covering setup, performance optimization, High DPI support, and docking features. Demonstrates seamless integration with modern C++20 and CMake."
+      },
+      "https://github.com/adamajammary/libsdl2gui": {
+        "id": 5,
+        "publisher": "Adam Ajammary",
+        "url": "https://github.com/adamajammary/libsdl2gui",
+        "title": "libsdl2gui: Cross-platform User Interface Library",
+        "info": "Free, cross-platform UI library using SDL2 with C++20, XML-based UI definitions, and comprehensive component set. Latest version v1.4.0 with full event-driven architecture and platform-specific features."
+      },
+      "https://www.forrestthewoods.com/blog/proving-immediate-mode-guis-are-performant/": {
+        "id": 6,
+        "publisher": "Forrest The Woods",
+        "url": "https://www.forrestthewoods.com/blog/proving-immediate-mode-guis-are-performant/",
+        "title": "Proving Immediate Mode GUIs are Performant",
+        "info": "Performance analysis showing IMGUIs consume 7.5-8.2W on M1 MacBook Pro (comparable to retained mode UIs like VSCode at 7.0W). Demonstrates IMGUIs are highly efficient even under worst-case 120Hz conditions."
+      },
+      "https://keasigmadelta.com/blog/building-a-cross-platform-c-gui-app-with-cmake-raylib-and-dear-imgui/": {
+        "id": 7,
+        "publisher": "Keasigma Media",
+        "url": "https://keasigmadelta.com/blog/building-a-cross-platform-c-gui-app-with-cmake-raylib-and-dear-imgui/",
+        "title": "Building Cross-Platform C++ GUI with Raylib and Dear ImGui",
+        "info": "Comparison of Raylib/raygui vs Dear ImGui approaches. Dear ImGui provides better performance and state management, while raygui offers simpler integration but with visual style limitations."
+      },
+      "https://github.com/Immediate-Mode-UI/Nuklear": {
+        "id": 8,
+        "publisher": "Immediate-Mode-UI Organization",
+        "url": "https://github.com/Immediate-Mode-UI/Nuklear",
+        "title": "Nuklear: Single-Header ANSI C GUI Library",
+        "info": "Minimal-state, immediate-mode GUI with 18kLOC, no dependencies, highly portable C89 implementation. Low memory footprint, total memory control, fully skinnable. 10.5k GitHub stars, excellent for real-time applications."
+      }
+    },
+    "Cataclysm-BN Codebase Architecture Analysis": {
+      "https://github.com/cataclysmbnteam/Cataclysm-BN": {
+        "id": 9,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN",
+        "title": "Cataclysm-BN Main Repository",
+        "info": "Main repository structure, file organization, and project overview. Identified key directories (src/, data/, mods/) and build system configuration (CMake, Makefile). Shows C++ as primary language (92.3%) with comprehensive build support for multiple platforms."
+      },
+      "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/main.cpp": {
+        "id": 10,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/main.cpp",
+        "title": "main.cpp - Entry Point and System Overview",
+        "info": "Core source code structure and organization. Identified key systems: game.cpp (main loop), savegame.cpp (persistence), input.cpp (input handling), ui.cpp (UI system), and cursesport.cpp (curses rendering). Shows breakdown of subsystems: game core, map management, entity management, scripting, rendering, input, and UI."
+      },
+      "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/game.cpp": {
+        "id": 11,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/game.cpp",
+        "title": "game.cpp - Core Game State and Loop",
+        "info": "Game state management through the game class (singleton), UI system structure with uistate and ui_adaptor, screen management functions (do_turn, look_around, list_items, etc.), and data structures for game state including map, player, NPCs, and world management."
+      },
+      "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/input.cpp": {
+        "id": 12,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/input.cpp",
+        "title": "input.cpp - Input Handling System",
+        "info": "Input event representation (input_event struct), global input manager (input_manager singleton), input contexts for different game modes, keybinding management (JSON format), action processing and dispatch, mouse and gamepad support, and Android-specific virtual controls."
+      },
+      "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/savegame.cpp": {
+        "id": 13,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/savegame.cpp",
+        "title": "savegame.cpp - File I/O and Persistence",
+        "info": "Save/load system with JSON serialization format, savegame versioning (current version 28), file I/O using C++ streams, data structures for game state, overmap data, and legacy format support. Uses Run-Length Encoding for efficient storage and modular serialization architecture."
+      },
+      "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/ui.cpp": {
+        "id": 14,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/ui.cpp",
+        "title": "ui.cpp - UI System and Menu Management",
+        "info": "UI system with uilist class for menu management, dynamic window sizing and positioning, text formatting and folding, hotkey support, filtering mechanisms, input context integration, and callback system for menu interactions."
+      },
+      "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/cursesport.cpp": {
+        "id": 15,
+        "publisher": "GitHub - cataclysmbnteam",
+        "url": "https://github.com/cataclysmbnteam/Cataclysm-BN/blob/master/src/cursesport.cpp",
+        "title": "cursesport.cpp - ASCII Rendering and Terminal Handling",
+        "info": "Curses rendering system for ASCII character display, window management with WINDOW struct, text storage in cursecell/cursecell structures, Unicode/UTF-8 character width handling, color and attribute management, and terminal output via external sdltiles.cpp module."
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "todos": {
+    "Coordinator": {
+      "1": {
+        "id": "1",
+        "content": "Research Cataclysm-BN codebase structure and architecture",
+        "details": "Analyze the current codebase, identify key systems (rendering, input handling, game logic), understand how ASCII rendering works, and document the current architecture for GUI integration planning.",
+        "status": "completed",
+        "priority": "high"
+      },
+      "2": {
+        "id": "2",
+        "content": "Design GUI overlay architecture and dual input system",
+        "details": "Create technical specifications for: 1) GUI layer that doesn't interfere with ASCII rendering, 2) Dual input handling (keyboard + mouse), 3) Event system for GUI-game communication, 4) Performance optimization strategy",
+        "status": "completed",
+        "priority": "high"
+      },
+      "3": {
+        "id": "3",
+        "content": "Implement basic GUI framework foundation",
+        "details": "Set up the core GUI system: 1) Initialize GUI framework (SDL2/raylib), 2) Create rendering pipeline for GUI overlay, 3) Implement basic window management, 4) Create event handling system for both mouse and keyboard input",
+        "status": "in_progress",
+        "priority": "high"
+      },
+      "4": {
+        "id": "4",
+        "content": "Create MVP GUI components with game menu system",
+        "details": "Build the essential GUI elements: 1) Visual map overlay (ASCII tiles with color), 2) Inventory panel with clickable items, 3) Character status/health bar, 4) Message log panel, 5) **Game menu system** (main menu, in-game pause menu, save/load interface, settings panel), 6) Basic navigation between GUI elements",
+        "status": "pending",
+        "priority": "medium"
+      },
+      "5": {
+        "id": "5",
+        "content": "Implement dual input binding and testing",
+        "details": "Connect GUI interactions to existing keyboard commands: 1) Map mouse clicks to keyboard actions, 2) Ensure all features work with keyboard only, 3) Create toggle system for GUI elements, 4) Implement performance testing and optimization",
+        "status": "pending",
+        "priority": "medium"
+      },
+      "6": {
+        "id": "6",
+        "content": "Create documentation and usage guide",
+        "details": "Document the MVP implementation: 1) How to build and run, 2) User guide for new GUI features, 3) Developer documentation for future enhancements, 4) Performance considerations and limitations",
+        "status": "pending",
+        "priority": "low"
+      }
+    }
+  }
+}
