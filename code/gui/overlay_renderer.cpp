@@ -1,56 +1,37 @@
-#include "gui_renderer.h"
+#include "overlay_renderer.h"
 #include <iostream>
 #include <cstring>
 
-// This is the main implementation file for the GUIRenderer class.
-// It uses the PIMPL idiom to hide implementation details from the header file.
-// It also includes the necessary headers for Dear ImGui and the SDL2 backend.
-
-// Use proper ImGui headers
 #include "imgui.h"
 #include "backends/imgui_impl_sdl2.h"
 #include "backends/imgui_impl_sdlrenderer2.h"
 
-/**
- * @brief PIMPL implementation structure for GUIRenderer
- */
-struct GUIRenderer::Impl {
-    // Core SDL handles
+struct OverlayRenderer::Impl {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     
-    // Dear ImGui components
     ImGuiContext* context = nullptr;
     ImGuiIO* io = nullptr;
     
-    // Configuration
     float dpi_scale = 1.0f;
     bool is_initialized = false;
     bool has_context = false;
     
-    // ImGui settings
     std::string ini_filename;
     std::string log_filename;
     bool docking_enabled = false;
     bool viewports_enabled = false;
     
-    // Error tracking
     std::string last_error;
     
     Impl() = default;
     ~Impl() = default;
     
-    /**
-     * @brief Log error message
-     */
     void LogError(const std::string& error) {
         last_error = error;
-        std::cerr << "GUI Renderer Error: " << error << std::endl;
+        std::cerr << "Overlay Renderer Error: " << error << std::endl;
     }
     
-    /**
-     * @brief Check SDL version compatibility
-     */
     bool CheckSDLVersion() const {
         SDL_version compiled;
         SDL_version linked;
@@ -58,7 +39,6 @@ struct GUIRenderer::Impl {
         SDL_VERSION(&compiled);
         SDL_GetVersion(&linked);
         
-        // Basic version check (in real implementation, more detailed checks)
         if (linked.major < compiled.major ||
             (linked.major == compiled.major && linked.minor < compiled.minor)) {
             return false;
@@ -67,61 +47,48 @@ struct GUIRenderer::Impl {
         return true;
     }
     
-    /**
-     * @brief Setup ImGui configuration
-     */
     void SetupImGuiConfig() {
         if (!io) return;
         
-        // Disable ImGui ini file by default for cleaner behavior
         if (ini_filename.empty()) {
             io->IniFilename = nullptr;
         } else {
             io->IniFilename = ini_filename.c_str();
         }
         
-        // Disable log file by default
         if (log_filename.empty()) {
             io->LogFilename = nullptr;
         } else {
             io->LogFilename = log_filename.c_str();
         }
         
-        // Configure IO settings
         io->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
         io->BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
     }
     
-    /**
-     * @brief Apply DPI scaling settings
-     */
     void ApplyDPISettings(float scale) {
         if (!io) return;
         
         dpi_scale = scale;
-        
-        // Apply global scale to ImGui
         io->FontGlobalScale = dpi_scale;
         
-        // Apply scale to SDL renderer
         if (renderer && scale > 0.0f) {
             SDL_RenderSetScale(renderer, scale, scale);
         }
     }
 };
 
-GUIRenderer::GUIRenderer() : pImpl_(std::make_unique<Impl>()) {
-}
+OverlayRenderer::OverlayRenderer() : pImpl_(std::make_unique<Impl>()) {}
 
-GUIRenderer::~GUIRenderer() {
+OverlayRenderer::~OverlayRenderer() {
     if (pImpl_->is_initialized) {
         Shutdown();
     }
 }
 
-bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float dpi_scale) {
+bool OverlayRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float dpi_scale) {
     if (pImpl_->is_initialized) {
-        pImpl_->LogError("GUI Renderer already initialized");
+        pImpl_->LogError("Overlay Renderer already initialized");
         return false;
     }
     
@@ -130,17 +97,14 @@ bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float d
         return false;
     }
     
-    // Check SDL version compatibility
     if (!pImpl_->CheckSDLVersion()) {
         pImpl_->LogError("Incompatible SDL version");
         return false;
     }
     
-    // Store handles
     pImpl_->window = window;
     pImpl_->renderer = renderer;
     
-    // Create ImGui context
     IMGUI_CHECKVERSION();
     pImpl_->context = ImGui::CreateContext();
     
@@ -157,40 +121,33 @@ bool GUIRenderer::Initialize(SDL_Window* window, SDL_Renderer* renderer, float d
         return false;
     }
     
-    // Setup ImGui configuration
     pImpl_->SetupImGuiConfig();
     
-    // Initialize SDL2 backend for ImGui
     if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer)) {
         pImpl_->LogError("Failed to initialize ImGui SDL2 backend");
         return false;
     }
     
-    // Initialize SDL Renderer backend for ImGui
     if (!ImGui_ImplSDLRenderer2_Init(renderer)) {
         pImpl_->LogError("Failed to initialize ImGui SDL Renderer backend");
         ImGui_ImplSDL2_Shutdown();
         return false;
     }
     
-    // Apply DPI scaling
     pImpl_->ApplyDPISettings(dpi_scale);
     
     pImpl_->is_initialized = true;
     return true;
 }
 
-// Shuts down the GUI renderer and cleans up all resources.
-void GUIRenderer::Shutdown() {
+void OverlayRenderer::Shutdown() {
     if (!pImpl_->is_initialized) {
         return;
     }
     
-    // Shutdown backends
     ImGui_ImplSDLRenderer2_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     
-    // Destroy ImGui context
     if (pImpl_->has_context && pImpl_->context) {
         ImGui::DestroyContext(pImpl_->context);
         pImpl_->context = nullptr;
@@ -199,27 +156,23 @@ void GUIRenderer::Shutdown() {
     pImpl_->has_context = false;
     pImpl_->io = nullptr;
     pImpl_->is_initialized = false;
-    pImpl_->window = nullptr;
-    pImpl_->renderer = nullptr;
 }
 
-void GUIRenderer::Update() {
+void OverlayRenderer::NewFrame() {
     if (!pImpl_->is_initialized || !pImpl_->has_context) {
         return;
     }
     
-    // Start new ImGui frame
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 }
 
-void GUIRenderer::Render() {
+void OverlayRenderer::Render() {
     if (!pImpl_->is_initialized || !pImpl_->has_context) {
         return;
     }
     
-    // Render ImGui draw data
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data) {
@@ -227,28 +180,25 @@ void GUIRenderer::Render() {
     }
 }
 
-bool GUIRenderer::HandleEvent(const SDL_Event& event) {
+bool OverlayRenderer::HandleEvent(const SDL_Event& event) {
     if (!pImpl_->is_initialized || !pImpl_->has_context) {
         return false;
     }
     
-    // Process event through ImGui
     ImGui_ImplSDL2_ProcessEvent(&event);
 
-    // Check if ImGui wants to capture input
     return pImpl_->io && (pImpl_->io->WantCaptureMouse || pImpl_->io->WantCaptureKeyboard);
 }
 
-void GUIRenderer::OnWindowResized(int width, int height) {
+void OverlayRenderer::OnWindowResized(int width, int height) {
     if (!pImpl_->is_initialized || !pImpl_->io) {
         return;
     }
     
-    // Update display size in ImGui IO
     pImpl_->io->DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
 }
 
-void GUIRenderer::SetIniFilename(const std::string& filename) {
+void OverlayRenderer::SetIniFilename(const std::string& filename) {
     pImpl_->ini_filename = filename;
     
     if (pImpl_->io) {
@@ -260,7 +210,7 @@ void GUIRenderer::SetIniFilename(const std::string& filename) {
     }
 }
 
-void GUIRenderer::SetLogFilename(const std::string& filename) {
+void OverlayRenderer::SetLogFilename(const std::string& filename) {
     pImpl_->log_filename = filename;
     
     if (pImpl_->io) {
@@ -272,7 +222,7 @@ void GUIRenderer::SetLogFilename(const std::string& filename) {
     }
 }
 
-void GUIRenderer::SetDockingEnabled(bool enabled) {
+void OverlayRenderer::SetDockingEnabled(bool enabled) {
     pImpl_->docking_enabled = enabled;
     
     if (pImpl_->io) {
@@ -284,7 +234,7 @@ void GUIRenderer::SetDockingEnabled(bool enabled) {
     }
 }
 
-void GUIRenderer::SetViewportsEnabled(bool enabled) {
+void OverlayRenderer::SetViewportsEnabled(bool enabled) {
     pImpl_->viewports_enabled = enabled;
     
     if (pImpl_->io) {
@@ -296,28 +246,27 @@ void GUIRenderer::SetViewportsEnabled(bool enabled) {
     }
 }
 
-ImGuiContext* GUIRenderer::GetContext() const {
+ImGuiContext* OverlayRenderer::GetContext() const {
     return pImpl_->context;
 }
 
-ImGuiIO* GUIRenderer::GetIO() const {
+ImGuiIO* OverlayRenderer::GetIO() const {
     return pImpl_->io;
 }
 
-bool GUIRenderer::IsInitialized() const {
+bool OverlayRenderer::IsInitialized() const {
     return pImpl_->is_initialized;
 }
 
-bool GUIRenderer::HasContext() const {
+bool OverlayRenderer::HasContext() const {
     return pImpl_->has_context;
 }
 
-void GUIRenderer::RebuildFontAtlas() {
+void OverlayRenderer::RebuildFontAtlas() {
     if (!pImpl_->is_initialized || !pImpl_->has_context) {
         return;
     }
     
-    // Rebuild font atlas
     if (pImpl_->io && pImpl_->io->Fonts) {
         pImpl_->io->Fonts->Clear();
         pImpl_->io->Fonts->AddFontDefault();

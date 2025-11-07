@@ -7,8 +7,11 @@ find_package(SDL2 REQUIRED)
 
 # GUI Manager Library
 set(GUI_SOURCES
-    gui_manager.cpp
-    gui_renderer.cpp
+    overlay_manager.cpp
+    overlay_renderer.cpp
+    overlay_ui.cpp
+    event_bus.cpp
+    event_bus_adapter.cpp
     libs/imgui/imgui.cpp
     libs/imgui/imgui_draw.cpp
     libs/imgui/imgui_tables.cpp
@@ -18,8 +21,12 @@ set(GUI_SOURCES
 )
 
 set(GUI_HEADERS
-    gui_manager.h
-    gui_renderer.h
+    overlay_manager.h
+    overlay_renderer.h
+    overlay_ui.h
+    event_bus.h
+    event_bus_adapter.h
+    mock_events.h
 )
 
 # Create static library for GUI module
@@ -76,7 +83,7 @@ if(BUILD_TESTING)
     # Add test target (in a full implementation)
     add_executable(test_gui)
     target_sources(test_gui PRIVATE
-        test_gui_manager.cpp
+        test_overlay_manager.cpp
         "libs/imgui/imgui_demo.cpp"
     )
     target_link_libraries(test_gui cataclysm_gui SDL2::SDL2)
