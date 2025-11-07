@@ -3,8 +3,9 @@
 #include "mock_events.h"
 #include "imgui.h"
 #include "map_widget.h"
+#include "InventoryWidget.h"
 
-OverlayUI::OverlayUI(cataclysm::gui::EventBusAdapter& event_bus_adapter) : map_widget_(std::make_unique<MapWidget>()), event_bus_adapter_(event_bus_adapter) {}
+OverlayUI::OverlayUI(cataclysm::gui::EventBusAdapter& event_bus_adapter) : map_widget_(std::make_unique<MapWidget>()), inventory_widget_(std::make_unique<InventoryWidget>()), event_bus_adapter_(event_bus_adapter) {}
 
 OverlayUI::~OverlayUI() {}
 
@@ -12,6 +13,7 @@ void OverlayUI::Draw() {
     ImGui::ShowDemoWindow();
 
     map_widget_->Draw();
+    inventory_widget_->Draw();
 
     ImGui::Begin("Event Publishing Demo");
     if (ImGui::Button("Publish Mock Event")) {

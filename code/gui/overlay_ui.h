@@ -10,6 +10,7 @@ class EventBusAdapter;
 }
 
 class MapWidget;
+class InventoryWidget;
 
 class OverlayUI {
 public:
@@ -20,6 +21,7 @@ public:
 
 private:
     std::unique_ptr<MapWidget> map_widget_;
+    std::unique_ptr<InventoryWidget> inventory_widget_;
     cataclysm::gui::EventBusAdapter& event_bus_adapter_;
 };
 
