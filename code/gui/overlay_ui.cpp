@@ -18,3 +18,7 @@ void OverlayUI::Draw() {
     map_widget_->Draw();
     inventory_widget_->Draw();
 }
+
+void OverlayUI::UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h) {
+    map_widget_->UpdateMapTexture(texture, width, height, tiles_w, tiles_h);
+}

@@ -1,6 +1,7 @@
 #ifndef OVERLAY_UI_H
 #define OVERLAY_UI_H
 
+#include <SDL.h>
 #include <memory>
 
 namespace cataclysm {
@@ -18,6 +19,7 @@ public:
     ~OverlayUI();
 
     void Draw();
+    void UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h);
 
 private:
     std::unique_ptr<MapWidget> map_widget_;
