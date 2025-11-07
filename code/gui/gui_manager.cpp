@@ -358,3 +358,11 @@ void GUIManager::LogError(const std::string& error) const {
 bool GUIManager::IsGraphicalBuild() const {
     return pImpl_->is_graphical_build;
 }
+
+bool GUIManager::IsSupported() const {
+#if defined(NO_SDL) || defined(SDL_TIMERS_ONLY)
+    return false;
+#else
+    return true;
+#endif
+}

@@ -128,6 +128,11 @@ public:
      */
     const std::string& GetLastError() const;
     
+    /**
+     * @brief Check if GUI is supported in current build
+     */
+    bool IsSupported() const;
+
     // Rule of five - proper lifecycle management
     GUIManager();
     ~GUIManager();

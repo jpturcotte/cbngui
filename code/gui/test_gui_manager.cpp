@@ -48,16 +48,14 @@ public:
             return false;
         }
         
-        // Configure GUI Manager
-        GUIManager::Config config;
-        config.enabled = true;
-        config.pass_through_input = true;
-        config.dpi_scale = 1.0f;
-        config.minimize_pause = true;
-        config.ini_filename = "imgui_test.ini";
+        // Check if GUI is supported
+        if (!gui_manager_->IsSupported()) {
+            std::cout << "GUI not supported in this build, skipping GUI initialization" << std::endl;
+            return true;
+        }
         
-        // Initialize GUI Manager
-        if (!gui_manager_->Initialize(window_, renderer_, config)) {
+        // Initialize GUI Manager with default settings
+        if (!gui_manager_->Initialize(window_, renderer_)) {
             std::cerr << "Failed to initialize GUI Manager: " << gui_manager_->GetLastError() << std::endl;
             SDL_DestroyRenderer(renderer_);
             SDL_DestroyWindow(window_);
