@@ -365,6 +365,62 @@ private:
     int subscribed_events_ = 0;
 };
 
+/**
+ * Event: Map Tile Hovered
+ * Published when the mouse hovers over a tile in the map widget.
+ * Subscribers: Tooltip system, context-aware UI elements
+ */
+class MapTileHoveredEvent : public GuiEvent {
+public:
+    MapTileHoveredEvent(int x, int y)
+        : GuiEvent("map_widget"), x_(x), y_(y) {}
+
+    std::string getEventTypeName() const override { return "map_tile_hovered"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<MapTileHoveredEvent>(x_, y_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    int getX() const { return x_; }
+    void setX(int x) { x_ = x; }
+
+    int getY() const { return y_; }
+    void setY(int y) { y_ = y; }
+
+private:
+    int x_;
+    int y_;
+};
+
+/**
+ * Event: Map Tile Clicked
+ * Published when a tile in the map widget is clicked.
+ * Subscribers: Player movement system, interaction system
+ */
+class MapTileClickedEvent : public GuiEvent {
+public:
+    MapTileClickedEvent(int x, int y)
+        : GuiEvent("map_widget"), x_(x), y_(y) {}
+
+    std::string getEventTypeName() const override { return "map_tile_clicked"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<MapTileClickedEvent>(x_, y_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    int getX() const { return x_; }
+    void setX(int x) { x_ = x; }
+
+    int getY() const { return y_; }
+    void setY(int y) { y_ = y; }
+
+private:
+    int x_;
+    int y_;
+};
+
 } // namespace gui
 } // namespace cataclysm
 

@@ -98,6 +98,22 @@ public:
     void publishDataBindingUpdate(const std::string& binding_id,
                                 const std::string& data_source,
                                 bool forced = false);
+
+    /**
+     * Publish a map tile hovered event.
+     * Called when the mouse hovers over a tile in the map widget.
+     * @param x The x-coordinate of the tile
+     * @param y The y-coordinate of the tile
+     */
+    void publishMapTileHovered(int x, int y);
+
+    /**
+     * Publish a map tile clicked event.
+     * Called when a tile in the map widget is clicked.
+     * @param x The x-coordinate of the tile
+     * @param y The y-coordinate of the tile
+     */
+    void publishMapTileClicked(int x, int y);
     
     // =============================================================================
     // Gameplay Event Subscription Methods
