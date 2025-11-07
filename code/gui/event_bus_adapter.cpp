@@ -118,7 +118,7 @@ std::shared_ptr<EventSubscription> EventBusAdapter::subscribeToStatusChange(
     std::function<void(const GameplayStatusChangeEvent&)> callback) {
     
     auto subscription = event_bus_.subscribe<GameplayStatusChangeEvent>(
-        [callback = std::move(callback)](const GameplayStatusChangeEvent& event) {
+        [this, callback = std::move(callback)](const GameplayStatusChangeEvent& event) {
             callback(event);
             events_received_.fetch_add(1);
         }
@@ -135,7 +135,7 @@ std::shared_ptr<EventSubscription> EventBusAdapter::subscribeToInventoryChange(
     std::function<void(const GameplayInventoryChangeEvent&)> callback) {
     
     auto subscription = event_bus_.subscribe<GameplayInventoryChangeEvent>(
-        [callback = std::move(callback)](const GameplayInventoryChangeEvent& event) {
+        [this, callback = std::move(callback)](const GameplayInventoryChangeEvent& event) {
             callback(event);
             events_received_.fetch_add(1);
         }
@@ -152,7 +152,7 @@ std::shared_ptr<EventSubscription> EventBusAdapter::subscribeToGameplayNotice(
     std::function<void(const GameplayNoticeEvent&)> callback) {
     
     auto subscription = event_bus_.subscribe<GameplayNoticeEvent>(
-        [callback = std::move(callback)](const GameplayNoticeEvent& event) {
+        [this, callback = std::move(callback)](const GameplayNoticeEvent& event) {
             callback(event);
             events_received_.fetch_add(1);
         }
