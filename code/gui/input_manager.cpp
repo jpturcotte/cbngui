@@ -111,18 +111,18 @@ void InputManager::Shutdown() {
     
     // Clear handlers and contexts
     {
-        std::lock_guard<std::mutex> lock(impl_->handlers_mutex_);
+        std::lock_guard<std::mutex> lock(handlers_mutex_);
         impl_->handlers_.clear();
     }
-    
+
     {
-        std::lock_guard<std::mutex> lock(impl_->context_mutex_);
+        std::lock_guard<std::mutex> lock(context_mutex_);
         impl_->contexts_.clear();
         impl_->current_context_name_.clear();
     }
-    
+
     {
-        std::lock_guard<std::mutex> lock(impl_->listeners_mutex_);
+        std::lock_guard<std::mutex> lock(listeners_mutex_);
         impl_->focus_listeners_.clear();
     }
     
@@ -405,7 +405,26 @@ void InputManager::UpdateSettings(const InputSettings& settings) {
 }
 
 bool InputManager::ShouldConsumeEvent(const SDL_Event& event) const {
-    return ShouldConsumeEvent(event);
+    if (!initialized_.load() || !enabled_.load()) {
+        return false;
+    }
+
+    GUIEvent gui_event(SDLToEventType(event), event, DetermineEventPriority(event));
+
+    // If GUI does not currently have focus and pass-through is enabled, we
+    // allow the event to continue to the game systems.
+    FocusState focus = current_focus_state_.load();
+    if (focus == FocusState::GAME && settings_.pass_through_enabled) {
+        return false;
+    }
+
+    // Shared focus respects pass-through behaviour but still allows the GUI
+    // layer to consume mouse/keyboard when it overlaps GUI regions.
+    if (focus == FocusState::SHARED && settings_.pass_through_enabled) {
+        return IsEventConsumedByGUI(gui_event);
+    }
+
+    return IsEventConsumedByGUI(gui_event);
 }
 
 InputManager::Statistics InputManager::GetStatistics() const {
