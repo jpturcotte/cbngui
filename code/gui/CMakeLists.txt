@@ -74,8 +74,9 @@ install(FILES ${GUI_HEADERS}
 # Export the library
 if(BUILD_TESTING)
     # Add test target (in a full implementation)
-    add_executable(test_gui test_gui_manager.cpp)
+    add_executable(test_gui)
     target_sources(test_gui PRIVATE
+        test_gui_manager.cpp
         "libs/imgui/imgui_demo.cpp"
     )
     target_link_libraries(test_gui cataclysm_gui SDL2::SDL2)
