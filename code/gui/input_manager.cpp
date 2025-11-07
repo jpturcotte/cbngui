@@ -496,9 +496,34 @@ InputManager::Priority InputManager::DetermineEventPriority(const SDL_Event& eve
 
 bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
     // For mouse events, check if mouse is in GUI area
-    if (event.type == EventType::MOUSE_MOVE || event.type == EventType::MOUSE_BUTTON_PRESS || 
+    if (event.type == EventType::MOUSE_MOVE || event.type == EventType::MOUSE_BUTTON_PRESS ||
         event.type == EventType::MOUSE_BUTTON_RELEASE || event.type == EventType::MOUSE_WHEEL) {
-        return impl_->IsMouseInGUIArea(impl_->mouse_x_, impl_->mouse_y_);
+        int mouse_x = impl_->mouse_x_;
+        int mouse_y = impl_->mouse_y_;
+
+        switch (event.sdl_event.type) {
+            case SDL_MOUSEMOTION:
+                mouse_x = event.sdl_event.motion.x;
+                mouse_y = event.sdl_event.motion.y;
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+                mouse_x = event.sdl_event.button.x;
+                mouse_y = event.sdl_event.button.y;
+                break;
+            case SDL_MOUSEWHEEL: {
+                int wheel_x = 0;
+                int wheel_y = 0;
+                SDL_GetMouseState(&wheel_x, &wheel_y);
+                mouse_x = wheel_x;
+                mouse_y = wheel_y;
+                break;
+            }
+            default:
+                break;
+        }
+
+        return impl_->IsMouseInGUIArea(mouse_x, mouse_y);
     }
     
     // For keyboard events, check if any handlers are registered
