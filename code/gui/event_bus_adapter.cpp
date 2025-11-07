@@ -114,6 +114,18 @@ void EventBusAdapter::publishDataBindingUpdate(const std::string& binding_id,
               << " (forced: " << (forced ? "yes" : "no") << ")" << std::endl;
 }
 
+void EventBusAdapter::publishMapTileHovered(int x, int y) {
+    MapTileHoveredEvent event(x, y);
+    event_bus_.publish(event);
+    events_published_.fetch_add(1);
+}
+
+void EventBusAdapter::publishMapTileClicked(int x, int y) {
+    MapTileClickedEvent event(x, y);
+    event_bus_.publish(event);
+    events_published_.fetch_add(1);
+}
+
 std::shared_ptr<EventSubscription> EventBusAdapter::subscribeToStatusChange(
     std::function<void(const GameplayStatusChangeEvent&)> callback) {
     
