@@ -10,3 +10,5 @@ code/gui/build/
 *.swp
 *.swo
 *~
+imgui*.ini
+*.log

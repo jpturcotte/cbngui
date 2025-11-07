@@ -1,11 +1,15 @@
 #ifndef OVERLAY_UI_H
 #define OVERLAY_UI_H
 
+#include <memory>
+
 namespace cataclysm {
 namespace gui {
 class EventBusAdapter;
 }
 }
+
+class MapWidget;
 
 class OverlayUI {
 public:
@@ -15,6 +19,7 @@ public:
     void Draw();
 
 private:
+    std::unique_ptr<MapWidget> map_widget_;
     cataclysm::gui::EventBusAdapter& event_bus_adapter_;
 };
 
