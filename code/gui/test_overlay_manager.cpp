@@ -1,9 +1,39 @@
 #include "overlay_manager.h"
+#include "event_bus.h"
+#include "events.h"
 #include "imgui.h"
 #include <iostream>
+#include <vector>
 #include <memory>
 #include <chrono>
 #include <thread>
+
+SDL_Texture* create_checkerboard_texture(SDL_Renderer* renderer, int width, int height, int tile_size) {
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+    if (!texture) {
+        std::cerr << "Failed to create checkerboard texture: " << SDL_GetError() << std::endl;
+        return nullptr;
+    }
+
+    SDL_SetRenderTarget(renderer, texture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    for (int y = 0; y < height; y += tile_size) {
+        for (int x = 0; x < width; x += tile_size) {
+            if ((x / tile_size + y / tile_size) % 2 == 0) {
+                SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 192, 192, 192, 255);
+            }
+            SDL_Rect rect = {x, y, tile_size, tile_size};
+            SDL_RenderFillRect(renderer, &rect);
+        }
+    }
+
+    SDL_SetRenderTarget(renderer, nullptr);
+    return texture;
+}
 
 class GUIExample {
 public:
@@ -58,6 +88,19 @@ public:
 
         overlay_manager_->Open();
 
+        map_texture_ = create_checkerboard_texture(renderer_, 480, 480, 16);
+        if (!map_texture_) {
+            return false;
+        }
+
+        auto& event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+        subscriptions_.push_back(event_bus.subscribe<cataclysm::gui::MapTileHoveredEvent>([](const cataclysm::gui::MapTileHoveredEvent& event) {
+            std::cout << "Map tile hovered at (" << event.getX() << ", " << event.getY() << ")" << std::endl;
+        }));
+        subscriptions_.push_back(event_bus.subscribe<cataclysm::gui::MapTileClickedEvent>([](const cataclysm::gui::MapTileClickedEvent& event) {
+            std::cout << "Map tile clicked at (" << event.getX() << ", " << event.getY() << ")" << std::endl;
+        }));
+
         return true;
     }
 
@@ -67,6 +110,8 @@ public:
             while (SDL_PollEvent(&event)) {
                 HandleEvent(event);
             }
+
+            overlay_manager_->UpdateMapTexture(map_texture_, 480, 480, 30, 30);
 
             SDL_SetRenderDrawColor(renderer_, 32, 32, 32, 255);
             SDL_RenderClear(renderer_);
@@ -80,6 +125,13 @@ public:
     }
 
     void Shutdown() {
+        for (auto& sub : subscriptions_) {
+            sub->unsubscribe();
+        }
+        subscriptions_.clear();
+        if (map_texture_) {
+            SDL_DestroyTexture(map_texture_);
+        }
         overlay_manager_->Shutdown();
 
         if (renderer_) {
@@ -136,18 +188,27 @@ private:
     std::unique_ptr<OverlayManager> overlay_manager_;
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
+    SDL_Texture* map_texture_ = nullptr;
     bool is_running_;
+    std::vector<std::shared_ptr<cataclysm::gui::EventSubscription>> subscriptions_;
 };
 
 int main(int argc, char* argv[]) {
-    GUIExample example;
+    cataclysm::gui::EventBusManager::initialize();
 
-    if (!example.Initialize()) {
-        return 1;
+    int exit_code = 0;
+    {
+        GUIExample example;
+
+        if (!example.Initialize()) {
+            example.Shutdown();
+            exit_code = 1;
+        } else {
+            example.Run();
+            example.Shutdown();
+        }
     }
 
-    example.Run();
-    example.Shutdown();
-
-    return 0;
+    cataclysm::gui::EventBusManager::shutdown();
+    return exit_code;
 }

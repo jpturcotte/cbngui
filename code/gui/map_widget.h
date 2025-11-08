@@ -1,11 +1,12 @@
 #ifndef MAP_WIDGET_H
 #define MAP_WIDGET_H
 
+#include <SDL.h>
+
 #include <optional>
 #include <string>
 #include <vector>
 
-#include <SDL.h>
 #include "event_bus_adapter.h"
 #include "imgui.h"
 
