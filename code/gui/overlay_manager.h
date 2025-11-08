@@ -1,10 +1,10 @@
 #ifndef OVERLAY_MANAGER_H
 #define OVERLAY_MANAGER_H
 
+#include <SDL.h>
 #include <memory>
 #include <string>
 #include <functional>
-#include <SDL.h>
 
 class OverlayManager {
 public:
@@ -26,6 +26,8 @@ public:
     void Shutdown();
 
     void Render();
+
+    void UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h);
 
     bool HandleEvent(const SDL_Event& event);
 

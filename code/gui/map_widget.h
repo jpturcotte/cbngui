@@ -5,13 +5,9 @@
 #include <string>
 #include <vector>
 
+#include <SDL.h>
 #include "event_bus_adapter.h"
 #include "imgui.h"
-
-struct Tile {
-    char character;
-    ImVec4 color;
-};
 
 struct TileSelection {
     int x = 0;
@@ -24,15 +20,18 @@ public:
     ~MapWidget();
 
     void Draw();
+    void UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h);
 
     [[nodiscard]] const ImVec2 &GetTileSize() const;
     [[nodiscard]] std::optional<TileSelection> GetSelectedTile() const;
 
 private:
-    std::vector<std::vector<Tile>> mock_map_;
     ImVec2 tile_size_;
     std::optional<TileSelection> selected_tile_;
     cataclysm::gui::EventBusAdapter &event_bus_adapter_;
+    SDL_Texture* map_texture_ = nullptr;
+    ImVec2 texture_size_{0,0};
+    ImVec2 tile_dimensions_{0,0};
 };
 
 #endif // MAP_WIDGET_H
