@@ -196,16 +196,19 @@ private:
 int main(int argc, char* argv[]) {
     cataclysm::gui::EventBusManager::initialize();
 
-    GUIExample example;
+    int exit_code = 0;
+    {
+        GUIExample example;
 
-    if (!example.Initialize()) {
-        cataclysm::gui::EventBusManager::shutdown();
-        return 1;
+        if (!example.Initialize()) {
+            example.Shutdown();
+            exit_code = 1;
+        } else {
+            example.Run();
+            example.Shutdown();
+        }
     }
 
-    example.Run();
-    example.Shutdown();
-
     cataclysm::gui::EventBusManager::shutdown();
-    return 0;
+    return exit_code;
 }
