@@ -13,7 +13,7 @@ OverlayUI::OverlayUI(cataclysm::gui::EventBusAdapter &event_bus_adapter)
 OverlayUI::~OverlayUI() = default;
 
 void OverlayUI::Draw() {
-    ImGui::ShowDemoWindow();
+    // ImGui::ShowDemoWindow();
 
     map_widget_->Draw();
     inventory_widget_->Draw();
