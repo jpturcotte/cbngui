@@ -166,7 +166,7 @@ void OverlayManager::Render() {
 }
 
 void OverlayManager::UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h) {
-    if (!pImpl_->is_initialized || !pImpl_->config.enabled || !pImpl_->is_open) {
+    if (!pImpl_->is_initialized || !pImpl_->config.enabled) {
         return;
     }
     if (pImpl_->overlay_ui) {
