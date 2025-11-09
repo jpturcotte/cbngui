@@ -50,12 +50,14 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
                             color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
                         }
 
+                        ImGui::PushID(i * 3 + j);
                         ImGui::PushStyleColor(ImGuiCol_Text, color);
                         std::string label = entry.hotkey + " " + entry.label;
                         if (ImGui::Selectable(label.c_str(), entry.is_selected)) {
                             event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
                         }
                         ImGui::PopStyleColor();
+                        ImGui::PopID();
                     }
                 }
             }
