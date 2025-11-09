@@ -28,6 +28,10 @@ public:
     void Render();
 
     void UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h);
+    void UpdateInventory(const struct inventory_overlay_state& state);
+    void ShowInventory();
+    void HideInventory();
+    bool IsInventoryVisible() const;
 
     bool HandleEvent(const SDL_Event& event);
 

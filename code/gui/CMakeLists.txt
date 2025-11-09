@@ -28,6 +28,7 @@ set(GUI_HEADERS
     overlay_ui.h
     map_widget.h
     InventoryWidget.h
+    InventoryOverlayState.h
     event_bus.h
     event_bus_adapter.h
     mock_events.h

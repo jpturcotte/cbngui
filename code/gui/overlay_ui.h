@@ -4,6 +4,8 @@
 #include <SDL.h>
 #include <memory>
 
+#include "InventoryOverlayState.h"
+
 namespace cataclysm {
 namespace gui {
 class EventBusAdapter;
@@ -19,6 +21,8 @@ public:
     ~OverlayUI();
 
     void Draw();
+    void DrawInventory(const inventory_overlay_state& state);
+
     void UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h);
 
 private:

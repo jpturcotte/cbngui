@@ -39,6 +39,7 @@ class GUIExample {
 public:
     GUIExample() : overlay_manager_(std::make_unique<OverlayManager>()), is_running_(true) {}
 
+    inventory_overlay_state mock_inventory_state_;
     bool Initialize() {
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
             std::cerr << "Failed to initialize SDL2: " << SDL_GetError() << std::endl;
@@ -101,6 +102,43 @@ public:
             std::cout << "Map tile clicked at (" << event.getX() << ", " << event.getY() << ")" << std::endl;
         }));
 
+        subscriptions_.push_back(event_bus.subscribe<cataclysm::gui::InventoryItemClickedEvent>([](const cataclysm::gui::InventoryItemClickedEvent& event) {
+            std::cout << "Inventory item clicked: " << event.getEntry().label << std::endl;
+        }));
+
+        mock_inventory_state_.title = "Inventory";
+        mock_inventory_state_.hotkey_hint = "[i] to close";
+        mock_inventory_state_.weight_label = "Weight: 10/100";
+        mock_inventory_state_.volume_label = "Volume: 10/100";
+        mock_inventory_state_.filter_string = "Filter: none";
+        mock_inventory_state_.navigation_mode = "Item mode";
+        mock_inventory_state_.active_column = 0;
+
+        mock_inventory_state_.columns[0].name = "Worn";
+        mock_inventory_state_.columns[0].scroll_position = 0;
+        mock_inventory_state_.columns[0].entries = {
+            {"Clothing", "", true, false, true, false, false, ""},
+            {"Backpack", "a", false, true, true, true, false, ""},
+            {"Jeans", "b", false, false, true, false, false, ""},
+        };
+
+        mock_inventory_state_.columns[1].name = "Inventory";
+        mock_inventory_state_.columns[1].scroll_position = 0;
+        mock_inventory_state_.columns[1].entries = {
+            {"Food", "", true, false, false, false, false, ""},
+            {"Water", "c", false, false, false, true, false, ""},
+            {"Can of Beans", "d", false, false, false, false, false, ""},
+            {"First Aid", "", true, false, false, false, false, ""},
+            {"Bandage", "e", false, false, false, false, false, ""},
+            {"Aspirin", "f", false, false, false, false, true, "Too weak"},
+        };
+
+        mock_inventory_state_.columns[2].name = "Ground";
+        mock_inventory_state_.columns[2].scroll_position = 0;
+        mock_inventory_state_.columns[2].entries = {
+            {"Rocks", "g", false, false, false, false, false, ""},
+        };
+
         return true;
     }
 
@@ -112,6 +150,7 @@ public:
             }
 
             overlay_manager_->UpdateMapTexture(map_texture_, 480, 480, 30, 30);
+            overlay_manager_->UpdateInventory(mock_inventory_state_);
 
             SDL_SetRenderDrawColor(renderer_, 32, 32, 32, 255);
             SDL_RenderClear(renderer_);
@@ -167,6 +206,12 @@ private:
                         break;
                     case SDLK_q:
                         is_running_ = false;
+                        break;
+                    case SDLK_i:
+                        overlay_manager_->ShowInventory();
+                        break;
+                    case SDLK_j:
+                        overlay_manager_->HideInventory();
                         break;
                 }
                 break;
