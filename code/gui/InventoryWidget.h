@@ -6,32 +6,19 @@
 #include <string>
 #include <vector>
 
+#include "InventoryOverlayState.h"
+#include "event_bus_adapter.h"
 #include "imgui.h"
-
-struct InventoryItem {
-    std::string name;
-    int quantity;
-    ImVec4 color;
-};
-
-enum class ItemAction {
-    Hover,
-    Click
-};
 
 class InventoryWidget {
 public:
-    InventoryWidget();
+    InventoryWidget(cataclysm::gui::EventBusAdapter& event_bus_adapter);
     ~InventoryWidget();
 
-    void Draw();
-
-    using ItemCallback = std::function<void(const InventoryItem& item, ItemAction action)>;
-    void SetItemCallback(ItemCallback callback);
+    void Draw(const inventory_overlay_state& state);
 
 private:
-    std::vector<InventoryItem> mock_inventory_;
-    ItemCallback item_callback_;
+    cataclysm::gui::EventBusAdapter& event_bus_adapter_;
 };
 
 #endif // INVENTORY_WIDGET_H
