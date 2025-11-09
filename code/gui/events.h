@@ -2,6 +2,7 @@
 #define GUI_EVENTS_H
 
 #include "event_bus.h"
+#include "InventoryOverlayState.h"
 #include <string>
 #include <memory>
 #include <vector>
@@ -419,6 +420,30 @@ public:
 private:
     int x_;
     int y_;
+};
+
+/**
+ * Event: Inventory Item Clicked
+ * Published when an item in the inventory widget is clicked.
+ * Subscribers: inventory_ui, game systems
+ */
+class InventoryItemClickedEvent : public GuiEvent {
+public:
+    InventoryItemClickedEvent(const inventory_entry& entry)
+        : GuiEvent("inventory_widget"), entry_(entry) {}
+
+    std::string getEventTypeName() const override { return "inventory_item_clicked"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<InventoryItemClickedEvent>(entry_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const inventory_entry& getEntry() const { return entry_; }
+    void setEntry(const inventory_entry& entry) { entry_ = entry; }
+
+private:
+    inventory_entry entry_;
 };
 
 } // namespace gui

@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <optional>
 
+#include "InventoryOverlayState.h"
 struct OverlayManager::Impl {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
@@ -29,6 +31,8 @@ struct OverlayManager::Impl {
 
     bool overlay_has_focus = false;
     bool pass_through_enabled = true;
+    bool inventory_widget_visible_ = false;
+    std::optional<inventory_overlay_state> inventory_state_;
 
     Impl() = default;
     ~Impl() = default;
@@ -162,6 +166,9 @@ void OverlayManager::Render() {
 
     pImpl_->overlay_renderer->NewFrame();
     pImpl_->overlay_ui->Draw();
+    if (pImpl_->inventory_widget_visible_ && pImpl_->inventory_state_) {
+        pImpl_->overlay_ui->DrawInventory(*pImpl_->inventory_state_);
+    }
     pImpl_->overlay_renderer->Render();
 }
 
@@ -172,6 +179,22 @@ void OverlayManager::UpdateMapTexture(SDL_Texture* texture, int width, int heigh
     if (pImpl_->overlay_ui) {
         pImpl_->overlay_ui->UpdateMapTexture(texture, width, height, tiles_w, tiles_h);
     }
+}
+
+void OverlayManager::UpdateInventory(const inventory_overlay_state& state) {
+    pImpl_->inventory_state_ = state;
+}
+
+void OverlayManager::ShowInventory() {
+    pImpl_->inventory_widget_visible_ = true;
+}
+
+void OverlayManager::HideInventory() {
+    pImpl_->inventory_widget_visible_ = false;
+}
+
+bool OverlayManager::IsInventoryVisible() const {
+    return pImpl_->inventory_widget_visible_;
 }
 
 bool OverlayManager::HandleEvent(const SDL_Event& event) {
