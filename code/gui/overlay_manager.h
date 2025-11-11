@@ -33,6 +33,11 @@ public:
     void HideInventory();
     bool IsInventoryVisible() const;
 
+    void UpdateCharacter(const struct character_overlay_state& state);
+    void ShowCharacter();
+    void HideCharacter();
+    bool IsCharacterVisible() const;
+
     bool HandleEvent(const SDL_Event& event);
 
     void Open();

@@ -12,6 +12,7 @@ set(GUI_SOURCES
     overlay_ui.cpp
     map_widget.cpp
     InventoryWidget.cpp
+    CharacterWidget.cpp
     event_bus.cpp
     event_bus_adapter.cpp
     libs/imgui/imgui.cpp
@@ -29,6 +30,8 @@ set(GUI_HEADERS
     map_widget.h
     InventoryWidget.h
     InventoryOverlayState.h
+    CharacterWidget.h
+    CharacterOverlayState.h
     event_bus.h
     event_bus_adapter.h
     mock_events.h
