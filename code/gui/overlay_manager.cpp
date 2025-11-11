@@ -9,6 +9,8 @@
 #include <optional>
 
 #include "InventoryOverlayState.h"
+#include "CharacterOverlayState.h"
+
 struct OverlayManager::Impl {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
@@ -33,6 +35,8 @@ struct OverlayManager::Impl {
     bool pass_through_enabled = true;
     bool inventory_widget_visible_ = false;
     std::optional<inventory_overlay_state> inventory_state_;
+    bool character_widget_visible_ = false;
+    std::optional<character_overlay_state> character_state_;
 
     Impl() = default;
     ~Impl() = default;
@@ -169,6 +173,9 @@ void OverlayManager::Render() {
     if (pImpl_->inventory_widget_visible_ && pImpl_->inventory_state_) {
         pImpl_->overlay_ui->DrawInventory(*pImpl_->inventory_state_);
     }
+    if (pImpl_->character_widget_visible_ && pImpl_->character_state_) {
+        pImpl_->overlay_ui->DrawCharacter(*pImpl_->character_state_);
+    }
     pImpl_->overlay_renderer->Render();
 }
 
@@ -195,6 +202,22 @@ void OverlayManager::HideInventory() {
 
 bool OverlayManager::IsInventoryVisible() const {
     return pImpl_->inventory_widget_visible_;
+}
+
+void OverlayManager::UpdateCharacter(const character_overlay_state& state) {
+    pImpl_->character_state_ = state;
+}
+
+void OverlayManager::ShowCharacter() {
+    pImpl_->character_widget_visible_ = true;
+}
+
+void OverlayManager::HideCharacter() {
+    pImpl_->character_widget_visible_ = false;
+}
+
+bool OverlayManager::IsCharacterVisible() const {
+    return pImpl_->character_widget_visible_;
 }
 
 bool OverlayManager::HandleEvent(const SDL_Event& event) {
