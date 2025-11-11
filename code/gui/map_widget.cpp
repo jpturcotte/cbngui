@@ -36,6 +36,10 @@ void MapWidget::Draw() {
         }
         ImGui::Image(reinterpret_cast<ImTextureID>(map_texture_), draw_size);
 
+        has_image_rect_ = true;
+        last_image_min_ = ImGui::GetItemRectMin();
+        last_image_max_ = ImGui::GetItemRectMax();
+
         if (ImGui::IsItemHovered()) {
             ImVec2 mouse_pos = ImGui::GetMousePos();
             ImVec2 image_pos = ImGui::GetItemRectMin();
@@ -53,7 +57,17 @@ void MapWidget::Draw() {
             }
         }
     } else {
+        has_image_rect_ = false;
         ImGui::TextUnformatted("Waiting for map snapshot…");
     }
     ImGui::End();
+}
+
+bool MapWidget::GetLastImageRect(ImVec2* min, ImVec2* max) const {
+    if (!has_image_rect_ || min == nullptr || max == nullptr) {
+        return false;
+    }
+    *min = last_image_min_;
+    *max = last_image_max_;
+    return true;
 }
