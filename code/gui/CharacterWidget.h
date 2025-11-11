@@ -28,6 +28,10 @@ private:
     };
 
     void RecordRect(std::vector<InteractiveRect>& container, const std::string& id);
+    bool FindRect(const std::vector<InteractiveRect>& container,
+                  const std::string& id,
+                  ImVec2* min,
+                  ImVec2* max) const;
 
     cataclysm::gui::EventBusAdapter& event_bus_adapter_;
     std::vector<InteractiveRect> tab_rects_;

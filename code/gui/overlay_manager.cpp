@@ -3,6 +3,7 @@
 #include "overlay_ui.h"
 #include "event_bus_adapter.h"
 #include "mock_events.h"
+#include "InventoryWidget.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -247,6 +248,19 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
 
     if (pImpl_->overlay_has_focus && pImpl_->overlay_renderer) {
         bool consumed = pImpl_->overlay_renderer->HandleEvent(event);
+
+        if (!consumed && pImpl_->overlay_ui) {
+            bool widget_consumed = false;
+
+            if (pImpl_->inventory_widget_visible_ && pImpl_->inventory_state_) {
+                widget_consumed = pImpl_->overlay_ui->GetInventoryWidget().HandleEvent(event);
+            }
+
+            if (widget_consumed) {
+                consumed = true;
+            }
+        }
+
         return consumed || !pImpl_->pass_through_enabled;
     }
 

@@ -15,38 +15,43 @@ void EventBus::publishDynamic(const std::unique_ptr<Event>& event) {
     if (!event) {
         return;
     }
-    
-    std::lock_guard<std::mutex> lock(subscriptions_mutex_);
-    
-    auto it = subscriptions_.find(std::type_index(typeid(*event)));
-    if (it != subscriptions_.end()) {
-        // Create a copy of subscriptions to avoid issues with unsubscription during iteration
-        auto subscriptions_copy = it->second;
-        
-        for (const auto& subscription : subscriptions_copy) {
-            if (subscription->isActive()) {
-                // For dynamic events, we need to cast back to the specific type
-                // This is a bit of a hack, but necessary for dynamic dispatch
-                // In practice, use the typed publish method for better performance
-                try {
-                    // Note: This would require runtime type information and virtual dispatch
-                    // For now, we'll skip dynamic event publishing as it's complex
-                    // and the typed publish method should be used instead
-                } catch (const std::exception& e) {
-                    std::cerr << "Error publishing dynamic event: " << e.what() << std::endl;
-                }
+
+    const std::type_index type_index(typeid(*event));
+    std::vector<std::shared_ptr<EventSubscription>> subscriptions_copy;
+
+    {
+        std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+        auto it = subscriptions_.find(type_index);
+        if (it == subscriptions_.end()) {
+            return;
+        }
+        subscriptions_copy = it->second;
+    }
+
+    for (const auto& subscription : subscriptions_copy) {
+        if (subscription && subscription->isActive()) {
+            try {
+                // Dynamic dispatch not implemented; prefer typed publish.
+            } catch (const std::exception& e) {
+                std::cerr << "Error publishing dynamic event: " << e.what() << std::endl;
             }
         }
-        
-        // Clean up inactive subscriptions
-        it->second.erase(
-            std::remove_if(it->second.begin(), it->second.end(), 
-                          [](const auto& sub) { return !sub->isActive(); }),
-            it->second.end()
-        );
-        
-        // Remove empty subscription lists
-        if (it->second.empty()) {
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+        auto it = subscriptions_.find(type_index);
+        if (it == subscriptions_.end()) {
+            return;
+        }
+
+        auto& stored = it->second;
+        stored.erase(
+            std::remove_if(stored.begin(), stored.end(),
+                           [](const auto& sub) { return !sub || !sub->isActive(); }),
+            stored.end());
+
+        if (stored.empty()) {
             subscriptions_.erase(it);
         }
     }
@@ -62,6 +67,39 @@ void EventBus::unsubscribeInternal(const std::type_index& event_type) {
         }
         subscriptions_.erase(it);
     }
+}
+
+void EventBus::unsubscribeInternal(const std::type_index& event_type, size_t subscription_id) {
+    auto it = subscriptions_.find(event_type);
+    if (it == subscriptions_.end()) {
+        return;
+    }
+
+    auto& subscriptions = it->second;
+    subscriptions.erase(std::remove_if(subscriptions.begin(), subscriptions.end(),
+                                       [subscription_id](const auto& subscription) {
+                                           if (!subscription) {
+                                               return true;
+                                           }
+                                           if (subscription->getId() == subscription_id) {
+                                               subscription->deactivate();
+                                               return true;
+                                           }
+                                           if (!subscription->isActive()) {
+                                               return true;
+                                           }
+                                           return false;
+                                       }),
+                        subscriptions.end());
+
+    if (subscriptions.empty()) {
+        subscriptions_.erase(it);
+    }
+}
+
+void EventBus::unsubscribeById(const std::type_index& event_type, size_t subscription_id) {
+    std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+    unsubscribeInternal(event_type, subscription_id);
 }
 
 void EventBus::clearAll() {
