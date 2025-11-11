@@ -56,7 +56,9 @@ void EventBus::unsubscribeInternal(const std::type_index& event_type) {
     auto it = subscriptions_.find(event_type);
     if (it != subscriptions_.end()) {
         for (auto& subscription : it->second) {
-            subscription->unsubscribe();
+            if (subscription) {
+                subscription->deactivate();
+            }
         }
         subscriptions_.erase(it);
     }
@@ -66,7 +68,9 @@ void EventBus::clearAll() {
     std::lock_guard<std::mutex> lock(subscriptions_mutex_);
     for (auto& [event_type, subscriptions] : subscriptions_) {
         for (auto& subscription : subscriptions) {
-            subscription->unsubscribe();
+            if (subscription) {
+                subscription->deactivate();
+            }
         }
     }
     subscriptions_.clear();
