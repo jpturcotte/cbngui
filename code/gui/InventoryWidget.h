@@ -15,6 +15,11 @@ public:
     InventoryWidget(cataclysm::gui::EventBusAdapter& event_bus_adapter);
     ~InventoryWidget();
 
+    InventoryWidget(const InventoryWidget&) = delete;
+    InventoryWidget& operator=(const InventoryWidget&) = delete;
+    InventoryWidget(InventoryWidget&&) = delete;
+    InventoryWidget& operator=(InventoryWidget&&) = delete;
+
     void Draw(const inventory_overlay_state& state);
 
 private:
