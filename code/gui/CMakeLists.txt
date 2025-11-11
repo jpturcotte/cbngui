@@ -91,7 +91,7 @@ if(BUILD_TESTING)
     # Add test target (in a full implementation)
     add_executable(test_gui)
     target_sources(test_gui PRIVATE
-        test_overlay_manager.cpp
+        test_gui.cpp
         "libs/imgui/imgui_demo.cpp"
     )
     target_link_libraries(test_gui cataclysm_gui SDL2::SDL2)
