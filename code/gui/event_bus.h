@@ -36,15 +36,24 @@ public:
         : active_(true), id_(0), unsubscribe_func_(std::move(unsubscribe_func)) {}
     
     void unsubscribe() {
+        std::function<void()> unsubscribe_copy;
         if (active_ && unsubscribe_func_) {
-            unsubscribe_func_();
             active_ = false;
+            unsubscribe_copy = std::move(unsubscribe_func_);
+        }
+        if (unsubscribe_copy) {
+            unsubscribe_copy();
         }
     }
-    
+
     bool isActive() const { return active_; }
     void setId(size_t id) { id_ = id; }
     size_t getId() const { return id_; }
+
+    void deactivate() {
+        active_ = false;
+        unsubscribe_func_ = nullptr;
+    }
 
 private:
     std::atomic<bool> active_;

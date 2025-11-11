@@ -205,6 +205,12 @@ int main() {
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize = ImVec2(1024.0f, 768.0f);
     io.DeltaTime = 1.0f / 60.0f;
+    io.Fonts->AddFontDefault();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    unsigned char* font_pixels = nullptr;
+    int font_width = 0;
+    int font_height = 0;
+    io.Fonts->GetTexDataAsRGBA32(&font_pixels, &font_width, &font_height);
 
     cataclysm::gui::EventBus event_bus;
     cataclysm::gui::EventBusAdapter adapter(event_bus);

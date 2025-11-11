@@ -56,7 +56,9 @@ void EventBus::unsubscribeInternal(const std::type_index& event_type) {
     auto it = subscriptions_.find(event_type);
     if (it != subscriptions_.end()) {
         for (auto& subscription : it->second) {
-            subscription->unsubscribe();
+            if (subscription) {
+                subscription->deactivate();
+            }
         }
         subscriptions_.erase(it);
     }
