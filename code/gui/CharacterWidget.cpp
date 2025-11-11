@@ -32,7 +32,38 @@ void DrawGrid(const char* title, const std::vector<character_overlay_column_entr
 }
 } // namespace
 
-void CharacterWidget::HandleKeyPresses() {
+void CharacterWidget::HandleTabNavigation(const character_overlay_state& state) {
+    constexpr size_t kFirstTabBarIndex = 3;
+    if (!ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
+        return;
+    }
+
+    if (state.tabs.size() <= kFirstTabBarIndex) {
+        return;
+    }
+
+    const int tab_count = static_cast<int>(state.tabs.size());
+    int current_index = state.active_tab_index;
+    if (current_index < static_cast<int>(kFirstTabBarIndex) || current_index >= tab_count) {
+        current_index = static_cast<int>(kFirstTabBarIndex);
+    }
+
+    const bool navigating_backward = ImGui::IsKeyDown(ImGuiKey_ModShift);
+    int new_index = current_index;
+
+    do {
+        new_index = navigating_backward ? new_index - 1 : new_index + 1;
+        if (new_index < 0) {
+            new_index = tab_count - 1;
+        } else if (new_index >= tab_count) {
+            new_index = 0;
+        }
+    } while (new_index < static_cast<int>(kFirstTabBarIndex));
+
+    event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(state.tabs[new_index].id));
+}
+
+void CharacterWidget::HandleKeyPresses(const character_overlay_state& state) {
     if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(cataclysm::gui::CharacterCommand::QUIT));
     } else if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
@@ -42,6 +73,8 @@ void CharacterWidget::HandleKeyPresses() {
     } else if (ImGui::IsKeyPressed(ImGuiKey_Slash) && ImGui::IsKeyDown(ImGuiKey_ModShift)) {
         event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(cataclysm::gui::CharacterCommand::HELP));
     }
+
+    HandleTabNavigation(state);
 }
 
 CharacterWidget::CharacterWidget(cataclysm::gui::EventBusAdapter& event_bus_adapter)
@@ -54,7 +87,7 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
     ImGui::Begin("Character");
 
-    HandleKeyPresses();
+    HandleKeyPresses(state);
 
     // Header
     ImGui::TextUnformatted(state.header_left.c_str());
