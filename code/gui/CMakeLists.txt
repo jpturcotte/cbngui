@@ -3,6 +3,10 @@ project(CataclysmBN_GUI)
 
 option(BUILD_TESTING "Build the tests" ON)
 
+if(BUILD_TESTING)
+    enable_testing()
+endif()
+
 find_package(SDL2 REQUIRED)
 
 # GUI Manager Library

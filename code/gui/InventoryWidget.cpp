@@ -2,6 +2,8 @@
 #include "events.h"
 #include "imgui.h"
 
+#include <SDL.h>
+
 #include <algorithm>
 #include <string>
 
@@ -45,11 +47,11 @@ ImVec4 ActiveColumnBackgroundColor() {
 const ImVec4 kFavoriteColor = ImVec4(1.0f, 0.85f, 0.2f, 1.0f);
 const ImVec4 kDisabledColor = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
 
-void DrawInventoryColumn(const inventory_column& column,
-                         int column_index,
-                         int active_column,
-                         cataclysm::gui::EventBusAdapter& event_bus_adapter,
-                         std::vector<InventoryWidget::EntryBounds>& entry_bounds) {
+}  // namespace
+
+void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
+                                          int column_index,
+                                          int active_column) {
     ImGui::PushID(column_index);
 
     const bool is_active_column = column_index == active_column;
@@ -87,6 +89,7 @@ void DrawInventoryColumn(const inventory_column& column,
         const bool is_highlighted = entry.is_highlighted;
         const bool row_selected = is_selected || is_highlighted;
         const bool overlap_selected_and_highlighted = is_selected && is_highlighted;
+        const bool is_interactable = !entry.is_disabled;
 
         ImVec4 text_color = default_text_color;
         if (entry.is_favorite) {
@@ -119,14 +122,15 @@ void DrawInventoryColumn(const inventory_column& column,
             label = entry.hotkey + " " + label;
         }
 
-        const float selectable_width = ImGui::GetContentRegionAvail().x;
-        if (ImGui::Selectable(label.c_str(), row_selected, ImGuiSelectableFlags_None,
-                              ImVec2(selectable_width, 0.0f))) {
-            event_bus_adapter.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
+        const bool selectable_pressed = ImGui::Selectable(label.c_str(), row_selected,
+                                                          ImGuiSelectableFlags_None);
+        const bool item_clicked = is_interactable &&
+            (selectable_pressed || ImGui::IsItemClicked(ImGuiMouseButton_Left));
+        if (item_clicked) {
+            event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
         }
 
-        entry_bounds.push_back({entry.hotkey, entry.label,
-                                ImGui::GetItemRectMin(), ImGui::GetItemRectMax()});
+        last_entry_bounds_.push_back({entry, ImGui::GetItemRectMin(), ImGui::GetItemRectMax()});
 
         if (!entry.disabled_msg.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
             ImGui::SetTooltip("%s", entry.disabled_msg.c_str());
@@ -139,8 +143,6 @@ void DrawInventoryColumn(const inventory_column& column,
 
     ImGui::PopID();
 }
-
-}  // namespace
 
 InventoryWidget::InventoryWidget(cataclysm::gui::EventBusAdapter& event_bus_adapter)
     : event_bus_adapter_(event_bus_adapter) {}
@@ -171,11 +173,15 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
     constexpr ImGuiTableFlags table_flags = ImGuiTableFlags_SizingStretchProp |
                                             ImGuiTableFlags_BordersInnerV |
                                             ImGuiTableFlags_BordersOuterV;
+    const float table_width = ImGui::GetContentRegionAvail().x;
+    const float column_width = table_width / 3.0f;
     if (ImGui::BeginTable("InventoryColumns", 3, table_flags)) {
+        ImGui::TableSetupColumn("Worn", ImGuiTableColumnFlags_WidthFixed, column_width);
+        ImGui::TableSetupColumn("Inventory", ImGuiTableColumnFlags_WidthFixed, column_width);
+        ImGui::TableSetupColumn("Ground", ImGuiTableColumnFlags_WidthFixed, column_width);
         for (int column_index = 0; column_index < 3; ++column_index) {
             ImGui::TableNextColumn();
-            DrawInventoryColumn(state.columns[column_index], column_index, state.active_column,
-                                event_bus_adapter_, last_entry_bounds_);
+            DrawInventoryColumn(state.columns[column_index], column_index, state.active_column);
         }
         ImGui::EndTable();
     }
@@ -195,6 +201,62 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
     ImGui::End();
 }
 
+bool InventoryWidget::HandleEvent(const SDL_Event& event) {
+    switch (event.type) {
+        case SDL_MOUSEBUTTONDOWN: {
+            if (event.button.button != SDL_BUTTON_LEFT) {
+                return false;
+            }
+
+            const ImVec2 click_pos(static_cast<float>(event.button.x),
+                                   static_cast<float>(event.button.y));
+            for (const auto& bounds : last_entry_bounds_) {
+                if (bounds.entry.is_category || bounds.entry.is_disabled) {
+                    continue;
+                }
+
+                if (click_pos.x >= bounds.min.x && click_pos.x <= bounds.max.x &&
+                    click_pos.y >= bounds.min.y && click_pos.y <= bounds.max.y) {
+                    event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(bounds.entry));
+                    return true;
+                }
+            }
+            return false;
+        }
+        case SDL_KEYDOWN: {
+            if (event.key.repeat != 0) {
+                return false;
+            }
+
+            const SDL_Keycode keycode = event.key.keysym.sym;
+            char key_char = '\0';
+            if (keycode >= SDLK_a && keycode <= SDLK_z) {
+                key_char = static_cast<char>('a' + (keycode - SDLK_a));
+            } else if (keycode >= SDLK_0 && keycode <= SDLK_9) {
+                key_char = static_cast<char>('0' + (keycode - SDLK_0));
+            }
+
+            if (key_char == '\0') {
+                return false;
+            }
+
+            const std::string hotkey(1, key_char);
+            for (const auto& bounds : last_entry_bounds_) {
+                if (bounds.entry.is_category || bounds.entry.is_disabled) {
+                    continue;
+                }
+                if (bounds.entry.hotkey == hotkey) {
+                    event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(bounds.entry));
+                    return true;
+                }
+            }
+            return false;
+        }
+        default:
+            return false;
+    }
+}
+
 bool InventoryWidget::GetEntryRect(const std::string& hotkey,
                                    const std::string& label,
                                    ImVec2* min,
@@ -203,7 +265,7 @@ bool InventoryWidget::GetEntryRect(const std::string& hotkey,
         return false;
     }
     for (const auto& bounds : last_entry_bounds_) {
-        if (bounds.hotkey == hotkey && bounds.label == label) {
+        if (bounds.entry.hotkey == hotkey && bounds.entry.label == label) {
             *min = bounds.min;
             *max = bounds.max;
             return true;

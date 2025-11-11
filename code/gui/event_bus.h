@@ -104,20 +104,22 @@ public:
     template<typename EventType, typename Callable>
     std::shared_ptr<EventSubscription> subscribe(Callable&& callback) {
         std::lock_guard<std::mutex> lock(subscriptions_mutex_);
-        
+
+        const std::type_index type_index(typeid(EventType));
+        const size_t subscription_id = next_subscription_id_++;
+
         auto subscription = std::make_shared<TypedEventSubscription<EventType>>(
             std::forward<Callable>(callback),
-            [this, type_index = std::type_index(typeid(EventType))]() {
-                unsubscribeInternal(type_index);
+            [this, type_index, subscription_id]() {
+                unsubscribeById(type_index, subscription_id);
             }
         );
-        
-        size_t subscription_id = next_subscription_id_++;
+
         subscription->setId(subscription_id);
-        
-        auto& event_subscriptions = subscriptions_[std::type_index(typeid(EventType))];
+
+        auto& event_subscriptions = subscriptions_[type_index];
         event_subscriptions.push_back(subscription);
-        
+
         return subscription;
     }
     
@@ -127,29 +129,39 @@ public:
      */
     template<typename EventType>
     void publish(const EventType& event) {
-        std::lock_guard<std::mutex> lock(subscriptions_mutex_);
-        
-        auto it = subscriptions_.find(std::type_index(typeid(EventType)));
-        if (it != subscriptions_.end()) {
-            // Create a copy of subscriptions to avoid issues with unsubscription during iteration
-            auto subscriptions_copy = it->second;
-            
-            for (const auto& subscription : subscriptions_copy) {
-                if (subscription->isActive()) {
-                    auto typed_subscription = std::static_pointer_cast<TypedEventSubscription<EventType>>(subscription);
-                    typed_subscription->invoke(event);
-                }
+        const std::type_index type_index(typeid(EventType));
+        std::vector<std::shared_ptr<EventSubscription>> subscriptions_copy;
+
+        {
+            std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+            auto it = subscriptions_.find(type_index);
+            if (it == subscriptions_.end()) {
+                return;
             }
-            
-            // Clean up inactive subscriptions
-            it->second.erase(
-                std::remove_if(it->second.begin(), it->second.end(), 
-                              [](const auto& sub) { return !sub->isActive(); }),
-                it->second.end()
-            );
-            
-            // Remove empty subscription lists
-            if (it->second.empty()) {
+            subscriptions_copy = it->second;
+        }
+
+        for (const auto& subscription : subscriptions_copy) {
+            if (subscription && subscription->isActive()) {
+                auto typed_subscription = std::static_pointer_cast<TypedEventSubscription<EventType>>(subscription);
+                typed_subscription->invoke(event);
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+            auto it = subscriptions_.find(type_index);
+            if (it == subscriptions_.end()) {
+                return;
+            }
+
+            auto& stored = it->second;
+            stored.erase(
+                std::remove_if(stored.begin(), stored.end(),
+                               [](const auto& sub) { return !sub || !sub->isActive(); }),
+                stored.end());
+
+            if (stored.empty()) {
                 subscriptions_.erase(it);
             }
         }
@@ -206,7 +218,9 @@ public:
 
 private:
     void unsubscribeInternal(const std::type_index& event_type);
-    
+    void unsubscribeInternal(const std::type_index& event_type, size_t subscription_id);
+    void unsubscribeById(const std::type_index& event_type, size_t subscription_id);
+
     std::unordered_map<std::type_index, std::vector<std::shared_ptr<EventSubscription>>> subscriptions_;
     mutable std::mutex subscriptions_mutex_;
     std::atomic<size_t> next_subscription_id_{0};

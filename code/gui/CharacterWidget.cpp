@@ -7,6 +7,7 @@
 
 #include "events.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 
 namespace {
 constexpr ImVec2 kTopGridSize(240.0f, 180.0f);
@@ -169,10 +170,37 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                 const ImGuiTabItemFlags tab_flags = is_active_tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
                 bool tab_open = ImGui::BeginTabItem(tab.title.c_str(), nullptr, tab_flags);
                 RecordRect(tab_rects_, tab.id);
-                if (tab_open) {
-                    if (!is_active_tab && ImGui::IsItemActivated()) {
+                ImVec2 tab_min = tab_rects_.back().min;
+                ImVec2 tab_max = tab_rects_.back().max;
+                if (ImGuiTabBar* tab_bar = ImGui::GetCurrentTabBar()) {
+                    const ImGuiID tab_item_id = ImGui::GetItemID();
+                    const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+                    float computed_offset = 0.0f;
+                    for (int tab_index = 0; tab_index < tab_bar->Tabs.Size; ++tab_index) {
+                        const ImGuiTabItem& tab_item = tab_bar->Tabs[tab_index];
+                        if (tab_item.ID == tab_item_id) {
+                            tab_min.x = tab_bar->BarRect.Min.x + computed_offset;
+                            tab_max.x = tab_min.x + tab_item.Width;
+                            tab_min.y = tab_bar->BarRect.Min.y;
+                            tab_max.y = tab_bar->BarRect.Max.y;
+                            tab_rects_.back().min = tab_min;
+                            tab_rects_.back().max = tab_max;
+                            break;
+                        }
+                        computed_offset += tab_bar->Tabs[tab_index].Width + spacing;
+                    }
+                }
+                const bool tab_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                const bool tab_activated = ImGui::IsItemActivated();
+                if (!is_active_tab && (tab_clicked || tab_activated)) {
+                    const ImVec2 mouse_pos = ImGui::GetMousePos();
+                    const bool within_tab = mouse_pos.x >= tab_min.x && mouse_pos.x <= tab_max.x &&
+                                            mouse_pos.y >= tab_min.y && mouse_pos.y <= tab_max.y;
+                    if (within_tab) {
                         event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(tab.id));
                     }
+                }
+                if (tab_open) {
                     if (ImGui::BeginTable("CharacterTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 200.0f);
                         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
@@ -182,10 +210,15 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                             ImGui::TableNextRow();
                             ImGui::TableSetColumnIndex(0);
                             bool is_selected = row.highlighted || (is_active_tab && (static_cast<int>(j) == state.active_row_index));
-                            if (ImGui::Selectable(row.name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                            const bool row_pressed = ImGui::Selectable(row.name.c_str(), is_selected,
+                                                                         ImGuiSelectableFlags_SpanAllColumns);
+                            RecordRect(row_rects_, tab.id + ":" + std::to_string(j));
+                            const InteractiveRect& row_rect = row_rects_.back();
+                            const bool row_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                            const bool row_activated = row_pressed || ImGui::IsItemActivated();
+                            if (row_clicked || row_activated) {
                                 event_bus_adapter_.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, j));
                             }
-                            RecordRect(row_rects_, tab.id + ":" + std::to_string(j));
                             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
                                 ImGui::SetTooltip("%s", row.tooltip.c_str());
                             }
@@ -221,10 +254,14 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
     auto draw_command_button = [&](const char* label,
                                    const std::string& binding,
                                    cataclysm::gui::CharacterCommand command) {
-        if (ImGui::SmallButton(label)) {
+        const bool button_pressed = ImGui::SmallButton(label);
+        RecordRect(command_button_rects_, label);
+        const InteractiveRect& button_rect = command_button_rects_.back();
+        const bool button_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+        const bool button_activated = button_pressed || ImGui::IsItemActivated();
+        if (button_clicked || button_activated) {
             event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(command));
         }
-        RecordRect(command_button_rects_, label);
         if (!binding.empty()) {
             ImGui::SameLine(0.0f, 4.0f);
             ImGui::TextDisabled("%s", binding.c_str());
@@ -255,27 +292,10 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
 }
 
 void CharacterWidget::RecordRect(std::vector<InteractiveRect>& container, const std::string& id) {
-    container.push_back({id, ImGui::GetItemRectMin(), ImGui::GetItemRectMax()});
+    ImVec2 min = ImGui::GetItemRectMin();
+    ImVec2 max = ImGui::GetItemRectMax();
+    container.push_back({id, min, max});
 }
-
-namespace {
-bool FindRect(const std::vector<CharacterWidget::InteractiveRect>& container,
-              const std::string& id,
-              ImVec2* min,
-              ImVec2* max) {
-    if (min == nullptr || max == nullptr) {
-        return false;
-    }
-    for (const auto& rect : container) {
-        if (rect.id == id) {
-            *min = rect.min;
-            *max = rect.max;
-            return true;
-        }
-    }
-    return false;
-}
-}  // namespace
 
 bool CharacterWidget::GetTabRect(const std::string& tab_id, ImVec2* min, ImVec2* max) const {
     return FindRect(tab_rects_, tab_id, min, max);
@@ -287,4 +307,23 @@ bool CharacterWidget::GetRowRect(const std::string& tab_id, size_t row_index, Im
 
 bool CharacterWidget::GetCommandButtonRect(const std::string& label, ImVec2* min, ImVec2* max) const {
     return FindRect(command_button_rects_, label, min, max);
+}
+
+bool CharacterWidget::FindRect(const std::vector<InteractiveRect>& container,
+                               const std::string& id,
+                               ImVec2* min,
+                               ImVec2* max) const {
+    if (min == nullptr || max == nullptr) {
+        return false;
+    }
+
+    for (const auto& rect : container) {
+        if (rect.id == id) {
+            *min = rect.min;
+            *max = rect.max;
+            return true;
+        }
+    }
+
+    return false;
 }
