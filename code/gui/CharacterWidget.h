@@ -12,6 +12,7 @@ public:
     void Draw(const character_overlay_state& state);
 
 private:
+    void HandleKeyPresses();
     cataclysm::gui::EventBusAdapter& event_bus_adapter_;
 };
 
