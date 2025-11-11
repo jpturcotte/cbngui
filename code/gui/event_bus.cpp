@@ -68,7 +68,9 @@ void EventBus::clearAll() {
     std::lock_guard<std::mutex> lock(subscriptions_mutex_);
     for (auto& [event_type, subscriptions] : subscriptions_) {
         for (auto& subscription : subscriptions) {
-            subscription->unsubscribe();
+            if (subscription) {
+                subscription->deactivate();
+            }
         }
     }
     subscriptions_.clear();
