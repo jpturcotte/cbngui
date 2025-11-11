@@ -28,79 +28,102 @@ private:
     int count_ = 0;
 };
 
+constexpr float kHighlightLightenAmount = 0.1f;
+constexpr float kTextLightenAmount = 0.2f;
+
 ImVec4 LightenColor(const ImVec4& color, float amount) {
-    return ImVec4(std::min(color.x + amount, 1.0f), std::min(color.y + amount, 1.0f),
-                  std::min(color.z + amount, 1.0f), color.w);
+    return ImVec4(std::min(color.x + amount, 1.0f),
+                  std::min(color.y + amount, 1.0f),
+                  std::min(color.z + amount, 1.0f),
+                  color.w);
 }
 
 ImVec4 ActiveColumnBackgroundColor() {
-    ImVec4 color = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
-    return LightenColor(color, 0.1f);
+    return LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_ChildBg), kHighlightLightenAmount);
 }
 
-void DrawInventoryColumn(const inventory_column& column, bool is_active_column, int column_index,
+const ImVec4 kFavoriteColor = ImVec4(1.0f, 0.85f, 0.2f, 1.0f);
+const ImVec4 kDisabledColor = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
+
+void DrawInventoryColumn(const inventory_column& column,
+                         int column_index,
+                         int active_column,
                          cataclysm::gui::EventBusAdapter& event_bus_adapter) {
     ImGui::PushID(column_index);
 
+    const bool is_active_column = column_index == active_column;
     StyleColorScope column_color_scope;
     if (is_active_column) {
         column_color_scope.Push(ImGuiCol_ChildBg, ActiveColumnBackgroundColor());
     }
 
-    constexpr ImGuiWindowFlags kChildFlags = ImGuiWindowFlags_AlwaysUseWindowPadding;
-    const ImVec2 child_size(0.0f, 0.0f);
-    ImGui::BeginChild("InventoryColumn", child_size, false, kChildFlags);
+    ImGui::TextUnformatted(column.name.c_str());
+    ImGui::Separator();
+
+    constexpr ImGuiWindowFlags kChildFlags = ImGuiWindowFlags_AlwaysUseWindowPadding |
+                                             ImGuiWindowFlags_HorizontalScrollbar;
+    ImGui::BeginChild("InventoryColumnBody", ImVec2(0, 0), false, kChildFlags);
+
+    if (column.scroll_position > 0) {
+        const float line_height = ImGui::GetTextLineHeightWithSpacing();
+        ImGui::SetScrollY(column.scroll_position * line_height);
+    }
 
     const ImVec4 default_text_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-    for (size_t entry_index = 0; entry_index < column.entries.size(); ++entry_index) {
-        const auto& entry = column.entries[entry_index];
+    for (size_t row_index = 0; row_index < column.entries.size(); ++row_index) {
+        const auto& entry = column.entries[row_index];
+        ImGui::PushID(static_cast<int>(row_index));
+
         if (entry.is_category) {
+            StyleColorScope category_color_scope;
+            category_color_scope.Push(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
             ImGui::SeparatorText(entry.label.c_str());
+            ImGui::PopID();
             continue;
         }
 
-        std::string label = entry.hotkey;
-        if (!label.empty()) {
-            label += ' ';
-        }
-        label += entry.label;
-
-        const bool row_selected = entry.is_selected || entry.is_highlighted;
-        const bool overlap_selected_and_highlighted = entry.is_selected && entry.is_highlighted;
+        const bool is_selected = entry.is_selected;
+        const bool is_highlighted = entry.is_highlighted;
+        const bool row_selected = is_selected || is_highlighted;
+        const bool overlap_selected_and_highlighted = is_selected && is_highlighted;
 
         ImVec4 text_color = default_text_color;
-        bool use_custom_text_color = false;
         if (entry.is_favorite) {
-            text_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
-            use_custom_text_color = true;
+            text_color = kFavoriteColor;
         }
         if (entry.is_disabled) {
-            text_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
-            use_custom_text_color = true;
+            text_color = kDisabledColor;
         }
         if (overlap_selected_and_highlighted) {
-            text_color = LightenColor(text_color, 0.2f);
-            use_custom_text_color = true;
+            text_color = LightenColor(text_color, kTextLightenAmount);
         }
 
-        ImGui::PushID(static_cast<int>(entry_index));
         StyleColorScope row_color_scope;
-        if (use_custom_text_color) {
+        if (entry.is_favorite || entry.is_disabled || overlap_selected_and_highlighted) {
             row_color_scope.Push(ImGuiCol_Text, text_color);
         }
-        if (overlap_selected_and_highlighted) {
-            row_color_scope.Push(ImGuiCol_Header,
-                                 LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_Header), 0.1f));
-            row_color_scope.Push(ImGuiCol_HeaderHovered,
-                                 LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered), 0.1f));
-            row_color_scope.Push(ImGuiCol_HeaderActive,
-                                 LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive), 0.1f));
+
+        if (is_highlighted) {
+            ImVec4 header_color = ImGui::GetStyleColorVec4(ImGuiCol_Header);
+            if (overlap_selected_and_highlighted) {
+                header_color = LightenColor(header_color, kHighlightLightenAmount);
+            }
+            row_color_scope.Push(ImGuiCol_Header, header_color);
+            row_color_scope.Push(ImGuiCol_HeaderHovered, header_color);
+            row_color_scope.Push(ImGuiCol_HeaderActive, header_color);
         }
 
-        const float full_width = ImGui::GetContentRegionAvail().x;
-        if (ImGui::Selectable(label.c_str(), row_selected, ImGuiSelectableFlags_None,
-                              ImVec2(full_width, 0.0f))) {
+        std::string label = entry.label;
+        if (!entry.hotkey.empty()) {
+            label = entry.hotkey + " " + label;
+        }
+
+        if (ImGui::Selectable(label.c_str(), row_selected, ImGuiSelectableFlags_SpanAvailWidth)) {
             event_bus_adapter.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
+        }
+
+        if (!entry.disabled_msg.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+            ImGui::SetTooltip("%s", entry.disabled_msg.c_str());
         }
 
         ImGui::PopID();
@@ -123,34 +146,43 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
 
     // Header
     ImGui::TextUnformatted(state.title.c_str());
-    ImGui::SameLine();
-    ImGui::TextUnformatted(state.hotkey_hint.c_str());
-    ImGui::SameLine();
-    ImGui::TextUnformatted(state.weight_label.c_str());
-    ImGui::SameLine();
-    ImGui::TextUnformatted(state.volume_label.c_str());
+    if (!state.hotkey_hint.empty()) {
+        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::TextDisabled("%s", state.hotkey_hint.c_str());
+    }
+    if (!state.weight_label.empty()) {
+        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::TextUnformatted(state.weight_label.c_str());
+    }
+    if (!state.volume_label.empty()) {
+        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::TextUnformatted(state.volume_label.c_str());
+    }
 
-    // Table
-    if (ImGui::BeginTable("InventoryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
-        ImGui::TableSetupColumn(state.columns[0].name.c_str());
-        ImGui::TableSetupColumn(state.columns[1].name.c_str());
-        ImGui::TableSetupColumn(state.columns[2].name.c_str());
-        ImGui::TableHeadersRow();
+    ImGui::Spacing();
 
-        ImGui::TableNextRow();
+    constexpr ImGuiTableFlags table_flags = ImGuiTableFlags_SizingStretchProp |
+                                            ImGuiTableFlags_BordersInnerV |
+                                            ImGuiTableFlags_BordersOuterV;
+    if (ImGui::BeginTable("InventoryColumns", 3, table_flags)) {
         for (int column_index = 0; column_index < 3; ++column_index) {
-            ImGui::TableSetColumnIndex(column_index);
-            const bool is_active_column = state.active_column == column_index;
-            DrawInventoryColumn(state.columns[column_index], is_active_column, column_index, event_bus_adapter_);
+            ImGui::TableNextColumn();
+            DrawInventoryColumn(state.columns[column_index], column_index, state.active_column, event_bus_adapter_);
         }
-
         ImGui::EndTable();
     }
 
-    // Footer
-    ImGui::TextUnformatted(state.filter_string.c_str());
-    ImGui::SameLine();
-    ImGui::TextUnformatted(state.navigation_mode.c_str());
+    ImGui::Spacing();
+
+    if (!state.filter_string.empty()) {
+        ImGui::TextUnformatted(state.filter_string.c_str());
+        if (!state.navigation_mode.empty()) {
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        }
+    }
+    if (!state.navigation_mode.empty()) {
+        ImGui::TextUnformatted(state.navigation_mode.c_str());
+    }
 
     ImGui::End();
 }
