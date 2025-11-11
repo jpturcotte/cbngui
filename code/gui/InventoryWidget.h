@@ -22,8 +22,20 @@ public:
 
     void Draw(const inventory_overlay_state& state);
 
+    [[nodiscard]] bool GetEntryRect(const std::string& hotkey,
+                                    const std::string& label,
+                                    ImVec2* min,
+                                    ImVec2* max) const;
+
 private:
     cataclysm::gui::EventBusAdapter& event_bus_adapter_;
+    struct EntryBounds {
+        std::string hotkey;
+        std::string label;
+        ImVec2 min{0.0f, 0.0f};
+        ImVec2 max{0.0f, 0.0f};
+    };
+    std::vector<EntryBounds> last_entry_bounds_;
 };
 
 #endif // INVENTORY_WIDGET_H

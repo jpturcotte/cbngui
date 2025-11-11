@@ -48,7 +48,8 @@ const ImVec4 kDisabledColor = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
 void DrawInventoryColumn(const inventory_column& column,
                          int column_index,
                          int active_column,
-                         cataclysm::gui::EventBusAdapter& event_bus_adapter) {
+                         cataclysm::gui::EventBusAdapter& event_bus_adapter,
+                         std::vector<InventoryWidget::EntryBounds>& entry_bounds) {
     ImGui::PushID(column_index);
 
     const bool is_active_column = column_index == active_column;
@@ -124,6 +125,9 @@ void DrawInventoryColumn(const inventory_column& column,
             event_bus_adapter.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
         }
 
+        entry_bounds.push_back({entry.hotkey, entry.label,
+                                ImGui::GetItemRectMin(), ImGui::GetItemRectMax()});
+
         if (!entry.disabled_msg.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
             ImGui::SetTooltip("%s", entry.disabled_msg.c_str());
         }
@@ -144,6 +148,7 @@ InventoryWidget::InventoryWidget(cataclysm::gui::EventBusAdapter& event_bus_adap
 InventoryWidget::~InventoryWidget() = default;
 
 void InventoryWidget::Draw(const inventory_overlay_state& state) {
+    last_entry_bounds_.clear();
     ImGui::Begin("Inventory");
 
     // Header
@@ -169,7 +174,8 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
     if (ImGui::BeginTable("InventoryColumns", 3, table_flags)) {
         for (int column_index = 0; column_index < 3; ++column_index) {
             ImGui::TableNextColumn();
-            DrawInventoryColumn(state.columns[column_index], column_index, state.active_column, event_bus_adapter_);
+            DrawInventoryColumn(state.columns[column_index], column_index, state.active_column,
+                                event_bus_adapter_, last_entry_bounds_);
         }
         ImGui::EndTable();
     }
@@ -187,4 +193,21 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
     }
 
     ImGui::End();
+}
+
+bool InventoryWidget::GetEntryRect(const std::string& hotkey,
+                                   const std::string& label,
+                                   ImVec2* min,
+                                   ImVec2* max) const {
+    if (min == nullptr || max == nullptr) {
+        return false;
+    }
+    for (const auto& bounds : last_entry_bounds_) {
+        if (bounds.hotkey == hotkey && bounds.label == label) {
+            *min = bounds.min;
+            *max = bounds.max;
+            return true;
+        }
+    }
+    return false;
 }

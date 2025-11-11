@@ -28,6 +28,10 @@ public:
 
     void UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h);
 
+    MapWidget& GetMapWidget();
+    InventoryWidget& GetInventoryWidget();
+    CharacterWidget& GetCharacterWidget();
+
 private:
     std::unique_ptr<MapWidget> map_widget_;
     std::unique_ptr<InventoryWidget> inventory_widget_;

@@ -25,6 +25,7 @@ public:
 
     [[nodiscard]] const ImVec2 &GetTileSize() const;
     [[nodiscard]] std::optional<TileSelection> GetSelectedTile() const;
+    [[nodiscard]] bool GetLastImageRect(ImVec2* min, ImVec2* max) const;
 
 private:
     ImVec2 tile_size_;
@@ -33,6 +34,9 @@ private:
     SDL_Texture* map_texture_ = nullptr;
     ImVec2 texture_size_{0,0};
     ImVec2 tile_dimensions_{0,0};
+    bool has_image_rect_ = false;
+    ImVec2 last_image_min_{0.0f, 0.0f};
+    ImVec2 last_image_max_{0.0f, 0.0f};
 };
 
 #endif // MAP_WIDGET_H

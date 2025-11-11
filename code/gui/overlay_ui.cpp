@@ -30,3 +30,15 @@ void OverlayUI::DrawCharacter(const character_overlay_state &state) {
 void OverlayUI::UpdateMapTexture(SDL_Texture* texture, int width, int height, int tiles_w, int tiles_h) {
     map_widget_->UpdateMapTexture(texture, width, height, tiles_w, tiles_h);
 }
+
+MapWidget& OverlayUI::GetMapWidget() {
+    return *map_widget_;
+}
+
+InventoryWidget& OverlayUI::GetInventoryWidget() {
+    return *inventory_widget_;
+}
+
+CharacterWidget& OverlayUI::GetCharacterWidget() {
+    return *character_widget_;
+}
