@@ -446,6 +446,69 @@ private:
     inventory_entry entry_;
 };
 
+class CharacterTabRequestedEvent : public GuiEvent {
+public:
+    CharacterTabRequestedEvent(const std::string& tab_id)
+        : GuiEvent("character_widget"), tab_id_(tab_id) {}
+
+    std::string getEventTypeName() const override { return "character_tab_requested"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<CharacterTabRequestedEvent>(tab_id_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const std::string& getTabId() const { return tab_id_; }
+
+private:
+    std::string tab_id_;
+};
+
+class CharacterRowActivatedEvent : public GuiEvent {
+public:
+    CharacterRowActivatedEvent(const std::string& tab_id, int row_index)
+        : GuiEvent("character_widget"), tab_id_(tab_id), row_index_(row_index) {}
+
+    std::string getEventTypeName() const override { return "character_row_activated"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<CharacterRowActivatedEvent>(tab_id_, row_index_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const std::string& getTabId() const { return tab_id_; }
+    int getRowIndex() const { return row_index_; }
+
+private:
+    std::string tab_id_;
+    int row_index_;
+};
+
+enum class CharacterCommand {
+    RENAME,
+    CONFIRM,
+    QUIT,
+    HELP,
+};
+
+class CharacterCommandEvent : public GuiEvent {
+public:
+    CharacterCommandEvent(CharacterCommand command)
+        : GuiEvent("character_widget"), command_(command) {}
+
+    std::string getEventTypeName() const override { return "character_command"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<CharacterCommandEvent>(command_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    CharacterCommand getCommand() const { return command_; }
+
+private:
+    CharacterCommand command_;
+};
+
 } // namespace gui
 } // namespace cataclysm
 

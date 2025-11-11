@@ -2,11 +2,21 @@
 #include "event_bus.h"
 #include "events.h"
 #include "imgui.h"
+#include "CharacterOverlayState.h"
 #include <iostream>
 #include <vector>
 #include <memory>
 #include <chrono>
 #include <thread>
+
+void save_screenshot(SDL_Renderer* renderer, const char* filename) {
+    int width, height;
+    SDL_GetRendererOutputSize(renderer, &width, &height);
+    SDL_Surface* surface = SDL_CreateRGBSurface(0, width, height, 32, 0, 0, 0, 0);
+    SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch);
+    SDL_SaveBMP(surface, filename);
+    SDL_FreeSurface(surface);
+}
 
 SDL_Texture* create_checkerboard_texture(SDL_Renderer* renderer, int width, int height, int tile_size) {
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
@@ -40,6 +50,7 @@ public:
     GUIExample() : overlay_manager_(std::make_unique<OverlayManager>()), is_running_(true) {}
 
     inventory_overlay_state mock_inventory_state_;
+    character_overlay_state mock_character_state_;
     bool Initialize() {
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
             std::cerr << "Failed to initialize SDL2: " << SDL_GetError() << std::endl;
@@ -105,6 +116,48 @@ public:
         subscriptions_.push_back(event_bus.subscribe<cataclysm::gui::InventoryItemClickedEvent>([](const cataclysm::gui::InventoryItemClickedEvent& event) {
             std::cout << "Inventory item clicked: " << event.getEntry().label << std::endl;
         }));
+        subscriptions_.push_back(event_bus.subscribe<cataclysm::gui::CharacterTabRequestedEvent>([](const cataclysm::gui::CharacterTabRequestedEvent& event) {
+            std::cout << "Character tab requested: " << event.getTabId() << std::endl;
+        }));
+        subscriptions_.push_back(event_bus.subscribe<cataclysm::gui::CharacterRowActivatedEvent>([](const cataclysm::gui::CharacterRowActivatedEvent& event) {
+            std::cout << "Character row activated: " << event.getTabId() << ", index " << event.getRowIndex() << std::endl;
+        }));
+
+        mock_character_state_.header_left = "Player Name - Brawler";
+        mock_character_state_.header_right = "[?] Help";
+        mock_character_state_.info_panel_text = "This is the info panel.\nIt can have multiple lines of text.\nIt describes the selected item.";
+        mock_character_state_.active_tab_index = 3;
+        mock_character_state_.active_row_index = 1;
+
+        mock_character_state_.tabs.push_back({"stats", "Stats", {
+            {"Strength", "10", "Affects melee damage.", 0xFFFFFFFF, false},
+            {"Dexterity", "8", "Affects dodge chance.", 0xFFFFFFFF, false},
+            {"Intelligence", "9", "Affects skill gain.", 0xFFFFFFFF, false},
+            {"Perception", "7", "Affects ranged accuracy.", 0xFFFFFFFF, false},
+        }});
+        mock_character_state_.tabs.push_back({"encumbrance", "Encumbrance", {
+            {"Head", "0", "", 0xFFFFFFFF, false},
+            {"Torso", "5", "", 0xFFFF00FF, false},
+            {"L Arm", "2", "", 0xFF00FFFF, false},
+            {"R Arm", "2", "", 0xFF00FFFF, false},
+        }});
+        mock_character_state_.tabs.push_back({"speed", "Speed", {
+            {"Base", "100", "", 0xFFFFFFFF, false},
+            {"Pain", "-10", "", 0xFFFF0000, false},
+            {"Total", "90", "", 0xFFFFFFFF, false},
+        }});
+        mock_character_state_.tabs.push_back({"skills", "Skills", {
+            {"Melee", "3", "Skill in hand-to-hand combat.", 0xFFFFFFFF, false},
+            {"Marksmanship", "2", "Skill with ranged weapons.", 0xFFFFFFFF, true},
+            {"Computers", "1", "Skill with computers.", 0xFFFFFFFF, false},
+        }});
+        mock_character_state_.tabs.push_back({"traits", "Traits", {
+            {"Tough", "", "You are tougher than normal.", 0xFF00FF00, false},
+            {"Fast Learner", "", "You learn skills faster.", 0xFF00FF00, false},
+        }});
+
+        mock_character_state_.footer_lines = {"This is a footer line.", "And another one."};
+        mock_character_state_.bindings = {"?", "TAB", "SHIFT+TAB", "ENTER", "ESC", "r"};
 
         mock_inventory_state_.title = "Inventory";
         mock_inventory_state_.hotkey_hint = "[i] to close";
@@ -151,6 +204,8 @@ public:
 
             overlay_manager_->UpdateMapTexture(map_texture_, 480, 480, 30, 30);
             overlay_manager_->UpdateInventory(mock_inventory_state_);
+            overlay_manager_->UpdateCharacter(mock_character_state_);
+            overlay_manager_->ShowCharacter();
 
             SDL_SetRenderDrawColor(renderer_, 32, 32, 32, 255);
             SDL_RenderClear(renderer_);
@@ -160,6 +215,14 @@ public:
             overlay_manager_->Render();
 
             SDL_RenderPresent(renderer_);
+
+            static bool screenshot_taken = false;
+            if (!screenshot_taken) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                save_screenshot(renderer_, "/tmp/verification.bmp");
+                screenshot_taken = true;
+                is_running_ = false;
+            }
         }
     }
 
