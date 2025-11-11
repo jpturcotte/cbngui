@@ -10,6 +10,64 @@
 namespace {
 constexpr ImVec2 kTopGridSize(240.0f, 180.0f);
 
+bool IsCharacterWindowFocused() {
+    return ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows |
+                                  ImGuiFocusedFlags_NoPopupHierarchy);
+}
+
+void HandleCommandKeys(cataclysm::gui::EventBusAdapter& event_bus_adapter) {
+    if (!IsCharacterWindowFocused()) {
+        return;
+    }
+
+    auto publish_command = [&](cataclysm::gui::CharacterCommand command) {
+        event_bus_adapter.publish(cataclysm::gui::CharacterCommandEvent(command));
+    };
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+        publish_command(cataclysm::gui::CharacterCommand::QUIT);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
+        publish_command(cataclysm::gui::CharacterCommand::CONFIRM);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+        publish_command(cataclysm::gui::CharacterCommand::RENAME);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_F1, false) ||
+        (ImGui::IsKeyPressed(ImGuiKey_Slash, false) && ImGui::GetIO().KeyShift)) {
+        publish_command(cataclysm::gui::CharacterCommand::HELP);
+    }
+}
+
+void HandleTabNavigation(const character_overlay_state& state,
+                         cataclysm::gui::EventBusAdapter& event_bus_adapter) {
+    if (!IsCharacterWindowFocused() || state.tabs.empty()) {
+        return;
+    }
+
+    const int tab_count = static_cast<int>(state.tabs.size());
+    const int active_index = std::clamp(state.active_tab_index, 0, tab_count - 1);
+
+    const bool shift_held = ImGui::GetIO().KeyShift;
+    if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
+        int target_index = active_index;
+        if (shift_held) {
+            target_index = (active_index - 1 + tab_count) % tab_count;
+        } else {
+            target_index = (active_index + 1) % tab_count;
+        }
+
+        if (target_index != active_index) {
+            event_bus_adapter.publish(
+                cataclysm::gui::CharacterTabRequestedEvent(state.tabs[target_index].id));
+        }
+    }
+}
+
 void DrawGrid(const character_overlay_tab& tab,
               int active_row_index,
               cataclysm::gui::EventBusAdapter& event_bus_adapter) {
@@ -182,6 +240,9 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                 state.bindings.confirm.c_str(),
                 state.bindings.quit.c_str(),
                 state.bindings.rename.c_str());
+
+    HandleCommandKeys(event_bus_adapter_);
+    HandleTabNavigation(state, event_bus_adapter_);
 
     ImGui::End();
 }
