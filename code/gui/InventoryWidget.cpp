@@ -7,23 +7,44 @@
 
 namespace {
 
+class StyleColorScope {
+public:
+    StyleColorScope() = default;
+    StyleColorScope(const StyleColorScope&) = delete;
+    StyleColorScope& operator=(const StyleColorScope&) = delete;
+
+    ~StyleColorScope() {
+        if (count_ > 0) {
+            ImGui::PopStyleColor(count_);
+        }
+    }
+
+    void Push(ImGuiCol idx, const ImVec4& color) {
+        ImGui::PushStyleColor(idx, color);
+        ++count_;
+    }
+
+private:
+    int count_ = 0;
+};
+
 ImVec4 LightenColor(const ImVec4& color, float amount) {
     return ImVec4(std::min(color.x + amount, 1.0f), std::min(color.y + amount, 1.0f),
                   std::min(color.z + amount, 1.0f), color.w);
 }
 
 ImVec4 ActiveColumnBackgroundColor() {
-    ImVec4 color = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-    color.w = std::max(color.w, 0.25f);
-    return color;
+    ImVec4 color = ImGui::GetStyleColorVec4(ImGuiCol_ChildBg);
+    return LightenColor(color, 0.1f);
 }
 
 void DrawInventoryColumn(const inventory_column& column, bool is_active_column, int column_index,
                          cataclysm::gui::EventBusAdapter& event_bus_adapter) {
     ImGui::PushID(column_index);
 
+    StyleColorScope column_color_scope;
     if (is_active_column) {
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ActiveColumnBackgroundColor());
+        column_color_scope.Push(ImGuiCol_ChildBg, ActiveColumnBackgroundColor());
     }
 
     constexpr ImGuiWindowFlags kChildFlags = ImGuiWindowFlags_AlwaysUseWindowPadding;
@@ -38,8 +59,14 @@ void DrawInventoryColumn(const inventory_column& column, bool is_active_column, 
             continue;
         }
 
-        std::string label = entry.hotkey.empty() ? entry.label : entry.hotkey + " " + entry.label;
+        std::string label = entry.hotkey;
+        if (!label.empty()) {
+            label += ' ';
+        }
+        label += entry.label;
+
         const bool row_selected = entry.is_selected || entry.is_highlighted;
+        const bool overlap_selected_and_highlighted = entry.is_selected && entry.is_highlighted;
 
         ImVec4 text_color = default_text_color;
         bool use_custom_text_color = false;
@@ -51,14 +78,23 @@ void DrawInventoryColumn(const inventory_column& column, bool is_active_column, 
             text_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
             use_custom_text_color = true;
         }
-        if (entry.is_selected && entry.is_highlighted) {
+        if (overlap_selected_and_highlighted) {
             text_color = LightenColor(text_color, 0.2f);
             use_custom_text_color = true;
         }
 
         ImGui::PushID(static_cast<int>(entry_index));
+        StyleColorScope row_color_scope;
         if (use_custom_text_color) {
-            ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+            row_color_scope.Push(ImGuiCol_Text, text_color);
+        }
+        if (overlap_selected_and_highlighted) {
+            row_color_scope.Push(ImGuiCol_Header,
+                                 LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_Header), 0.1f));
+            row_color_scope.Push(ImGuiCol_HeaderHovered,
+                                 LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered), 0.1f));
+            row_color_scope.Push(ImGuiCol_HeaderActive,
+                                 LightenColor(ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive), 0.1f));
         }
 
         const float full_width = ImGui::GetContentRegionAvail().x;
@@ -67,17 +103,10 @@ void DrawInventoryColumn(const inventory_column& column, bool is_active_column, 
             event_bus_adapter.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
         }
 
-        if (use_custom_text_color) {
-            ImGui::PopStyleColor();
-        }
         ImGui::PopID();
     }
 
     ImGui::EndChild();
-
-    if (is_active_column) {
-        ImGui::PopStyleColor();
-    }
 
     ImGui::PopID();
 }
