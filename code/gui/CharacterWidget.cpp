@@ -1,27 +1,91 @@
 #include "CharacterWidget.h"
-#include "imgui.h"
+
+#include <algorithm>
+#include <string_view>
 #include <vector>
+
 #include "events.h"
+#include "imgui.h"
 
 namespace {
-// Helper to draw one of the three top grids.
-void DrawGrid(const char* title, const std::vector<character_overlay_column_entry>& rows,
-              int active_row_index, const std::string& tab_id,
+constexpr ImVec2 kTopGridSize(240.0f, 180.0f);
+
+bool IsCharacterWindowFocused() {
+    return ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows |
+                                  ImGuiFocusedFlags_NoPopupHierarchy);
+}
+
+void HandleCommandKeys(cataclysm::gui::EventBusAdapter& event_bus_adapter) {
+    if (!IsCharacterWindowFocused()) {
+        return;
+    }
+
+    auto publish_command = [&](cataclysm::gui::CharacterCommand command) {
+        event_bus_adapter.publish(cataclysm::gui::CharacterCommandEvent(command));
+    };
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+        publish_command(cataclysm::gui::CharacterCommand::QUIT);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
+        publish_command(cataclysm::gui::CharacterCommand::CONFIRM);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+        publish_command(cataclysm::gui::CharacterCommand::RENAME);
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_F1, false) ||
+        (ImGui::IsKeyPressed(ImGuiKey_Slash, false) && ImGui::GetIO().KeyShift)) {
+        publish_command(cataclysm::gui::CharacterCommand::HELP);
+    }
+}
+
+void HandleTabNavigation(const character_overlay_state& state,
+                         cataclysm::gui::EventBusAdapter& event_bus_adapter) {
+    if (!IsCharacterWindowFocused() || state.tabs.empty()) {
+        return;
+    }
+
+    const int tab_count = static_cast<int>(state.tabs.size());
+    const int active_index = std::clamp(state.active_tab_index, 0, tab_count - 1);
+
+    const bool shift_held = ImGui::GetIO().KeyShift;
+    if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
+        int target_index = active_index;
+        if (shift_held) {
+            target_index = (active_index - 1 + tab_count) % tab_count;
+        } else {
+            target_index = (active_index + 1) % tab_count;
+        }
+
+        if (target_index != active_index) {
+            event_bus_adapter.publish(
+                cataclysm::gui::CharacterTabRequestedEvent(state.tabs[target_index].id));
+        }
+    }
+}
+
+void DrawGrid(const character_overlay_tab& tab,
+              int active_row_index,
               cataclysm::gui::EventBusAdapter& event_bus_adapter) {
-    if (ImGui::BeginTable(title, 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, ImVec2(220, 150))) {
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+    ImGui::PushID(tab.id.c_str());
+    if (ImGui::BeginTable("TopGrid", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, kTopGridSize)) {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 130.0f);
         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
-        for (size_t i = 0; i < rows.size(); ++i) {
-            const auto& row = rows[i];
+        for (size_t i = 0; i < tab.rows.size(); ++i) {
+            const auto& row = tab.rows[i];
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            bool is_selected = row.highlighted || (static_cast<int>(i) == active_row_index);
+            const bool is_selected = row.highlighted || (static_cast<int>(i) == active_row_index);
             if (ImGui::Selectable(row.name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
-                event_bus_adapter.publish(cataclysm::gui::CharacterRowActivatedEvent(tab_id, i));
+                event_bus_adapter.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, i));
             }
-            if (ImGui::IsItemHovered() && !row.tooltip.empty()) {
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
                 ImGui::SetTooltip("%s", row.tooltip.c_str());
             }
             ImGui::TableSetColumnIndex(1);
@@ -29,53 +93,24 @@ void DrawGrid(const char* title, const std::vector<character_overlay_column_entr
         }
         ImGui::EndTable();
     }
+    ImGui::PopID();
+}
+
+void DrawInfoPanel(std::string_view text) {
+    size_t start = 0;
+    while (start <= text.size()) {
+        const size_t end = text.find('\n', start);
+        std::string_view line = (end == std::string_view::npos)
+            ? text.substr(start)
+            : text.substr(start, end - start);
+        ImGui::TextUnformatted(line.data(), line.data() + line.size());
+        if (end == std::string_view::npos) {
+            break;
+        }
+        start = end + 1;
+    }
 }
 } // namespace
-
-void CharacterWidget::HandleTabNavigation(const character_overlay_state& state) {
-    constexpr size_t kFirstTabBarIndex = 3;
-    if (!ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
-        return;
-    }
-
-    if (state.tabs.size() <= kFirstTabBarIndex) {
-        return;
-    }
-
-    const int tab_count = static_cast<int>(state.tabs.size());
-    int current_index = state.active_tab_index;
-    if (current_index < static_cast<int>(kFirstTabBarIndex) || current_index >= tab_count) {
-        current_index = static_cast<int>(kFirstTabBarIndex);
-    }
-
-    const bool navigating_backward = ImGui::IsKeyDown(ImGuiKey_ModShift);
-    int new_index = current_index;
-
-    do {
-        new_index = navigating_backward ? new_index - 1 : new_index + 1;
-        if (new_index < 0) {
-            new_index = tab_count - 1;
-        } else if (new_index >= tab_count) {
-            new_index = 0;
-        }
-    } while (new_index < static_cast<int>(kFirstTabBarIndex));
-
-    event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(state.tabs[new_index].id));
-}
-
-void CharacterWidget::HandleKeyPresses(const character_overlay_state& state) {
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(cataclysm::gui::CharacterCommand::QUIT));
-    } else if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
-        event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(cataclysm::gui::CharacterCommand::CONFIRM));
-    } else if (ImGui::IsKeyPressed(ImGuiKey_R)) {
-        event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(cataclysm::gui::CharacterCommand::RENAME));
-    } else if (ImGui::IsKeyPressed(ImGuiKey_Slash) && ImGui::IsKeyDown(ImGuiKey_ModShift)) {
-        event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(cataclysm::gui::CharacterCommand::HELP));
-    }
-
-    HandleTabNavigation(state);
-}
 
 CharacterWidget::CharacterWidget(cataclysm::gui::EventBusAdapter& event_bus_adapter)
     : event_bus_adapter_(event_bus_adapter) {
@@ -87,27 +122,29 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
     ImGui::Begin("Character");
 
-    HandleKeyPresses(state);
-
     // Header
     ImGui::TextUnformatted(state.header_left.c_str());
-    ImGui::SameLine(ImGui::GetWindowWidth() - 200);
-    ImGui::TextUnformatted(state.header_right.c_str());
+    if (!state.header_right.empty()) {
+        float header_width = ImGui::CalcTextSize(state.header_right.c_str()).x;
+        float right_edge = ImGui::GetWindowContentRegionMax().x;
+        ImGui::SameLine(std::max(right_edge - header_width, ImGui::GetCursorPosX()));
+        ImGui::TextUnformatted(state.header_right.c_str());
+    }
     ImGui::Separator();
 
     // Top Grids (Stats, Encumbrance, Speed)
-    if (ImGui::BeginTable("TopGrids", 3)) {
+    if (ImGui::BeginTable("TopGrids", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableNextColumn();
         if (state.tabs.size() > 0) {
-            DrawGrid("Stats", state.tabs[0].rows, state.active_tab_index == 0 ? state.active_row_index : -1, state.tabs[0].id, event_bus_adapter_);
+            DrawGrid(state.tabs[0], state.active_tab_index == 0 ? state.active_row_index : -1, event_bus_adapter_);
         }
         ImGui::TableNextColumn();
         if (state.tabs.size() > 1) {
-            DrawGrid("Encumbrance", state.tabs[1].rows, state.active_tab_index == 1 ? state.active_row_index : -1, state.tabs[1].id, event_bus_adapter_);
+            DrawGrid(state.tabs[1], state.active_tab_index == 1 ? state.active_row_index : -1, event_bus_adapter_);
         }
         ImGui::TableNextColumn();
         if (state.tabs.size() > 2) {
-            DrawGrid("Speed", state.tabs[2].rows, state.active_tab_index == 2 ? state.active_row_index : -1, state.tabs[2].id, event_bus_adapter_);
+            DrawGrid(state.tabs[2], state.active_tab_index == 2 ? state.active_row_index : -1, event_bus_adapter_);
         }
         ImGui::EndTable();
     }
@@ -125,8 +162,10 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
             for (size_t i = 3; i < state.tabs.size(); ++i) {
                 const auto& tab = state.tabs[i];
                 bool is_active_tab = static_cast<int>(i) == state.active_tab_index;
-                if (ImGui::BeginTabItem(tab.title.c_str(), nullptr, is_active_tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
-                    if (ImGui::IsItemClicked()) {
+                ImGui::PushID(tab.id.c_str());
+                const ImGuiTabItemFlags tab_flags = is_active_tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+                if (ImGui::BeginTabItem(tab.title.c_str(), nullptr, tab_flags)) {
+                    if (!is_active_tab && ImGui::IsItemActivated()) {
                         event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(tab.id));
                     }
                     if (ImGui::BeginTable("CharacterTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
@@ -141,7 +180,7 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                             if (ImGui::Selectable(row.name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                                 event_bus_adapter_.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, j));
                             }
-                            if (ImGui::IsItemHovered() && !row.tooltip.empty()) {
+                            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
                                 ImGui::SetTooltip("%s", row.tooltip.c_str());
                             }
                             ImGui::TableSetColumnIndex(1);
@@ -151,13 +190,14 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                     }
                     ImGui::EndTabItem();
                 }
+                ImGui::PopID();
             }
             ImGui::EndTabBar();
         }
 
         ImGui::TableNextColumn();
         // Info Panel
-        ImGui::TextWrapped("%s", state.info_panel_text.c_str());
+        DrawInfoPanel(state.info_panel_text);
 
         ImGui::EndTable();
     }
@@ -169,6 +209,30 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
     for (const auto& line : state.footer_lines) {
         ImGui::TextUnformatted(line.c_str());
     }
+    ImGui::Spacing();
+
+    const float command_spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+    auto draw_command_button = [&](const char* label,
+                                   const std::string& binding,
+                                   cataclysm::gui::CharacterCommand command) {
+        if (ImGui::SmallButton(label)) {
+            event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(command));
+        }
+        if (!binding.empty()) {
+            ImGui::SameLine(0.0f, 4.0f);
+            ImGui::TextDisabled("%s", binding.c_str());
+        }
+    };
+
+    draw_command_button("Help", state.bindings.help, cataclysm::gui::CharacterCommand::HELP);
+    ImGui::SameLine(0.0f, command_spacing);
+    draw_command_button("Confirm", state.bindings.confirm, cataclysm::gui::CharacterCommand::CONFIRM);
+    ImGui::SameLine(0.0f, command_spacing);
+    draw_command_button("Quit", state.bindings.quit, cataclysm::gui::CharacterCommand::QUIT);
+    ImGui::SameLine(0.0f, command_spacing);
+    draw_command_button("Rename", state.bindings.rename, cataclysm::gui::CharacterCommand::RENAME);
+    ImGui::NewLine();
+
     ImGui::Text("Help: %s, Tab: %s, Back Tab: %s, Confirm: %s, Quit: %s, Rename: %s",
                 state.bindings.help.c_str(),
                 state.bindings.tab.c_str(),
@@ -176,6 +240,9 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                 state.bindings.confirm.c_str(),
                 state.bindings.quit.c_str(),
                 state.bindings.rename.c_str());
+
+    HandleCommandKeys(event_bus_adapter_);
+    HandleTabNavigation(state, event_bus_adapter_);
 
     ImGui::End();
 }

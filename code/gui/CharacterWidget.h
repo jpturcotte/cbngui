@@ -9,11 +9,14 @@ public:
     CharacterWidget(cataclysm::gui::EventBusAdapter& event_bus_adapter);
     ~CharacterWidget();
 
+    CharacterWidget(const CharacterWidget&) = delete;
+    CharacterWidget& operator=(const CharacterWidget&) = delete;
+    CharacterWidget(CharacterWidget&&) = delete;
+    CharacterWidget& operator=(CharacterWidget&&) = delete;
+
     void Draw(const character_overlay_state& state);
 
 private:
-    void HandleKeyPresses(const character_overlay_state& state);
-    void HandleTabNavigation(const character_overlay_state& state);
     cataclysm::gui::EventBusAdapter& event_bus_adapter_;
 };
 
