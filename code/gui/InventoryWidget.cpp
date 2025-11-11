@@ -5,6 +5,8 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <cctype>
+#include <optional>
 #include <string>
 
 namespace {
@@ -48,6 +50,123 @@ const ImVec4 kFavoriteColor = ImVec4(1.0f, 0.85f, 0.2f, 1.0f);
 const ImVec4 kDisabledColor = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
 
 }  // namespace
+
+std::string InventoryWidget::BuildEntryKey(int column_index,
+                                           int row_index,
+                                           const inventory_entry& entry) {
+    return std::to_string(column_index) + ":" + std::to_string(row_index) + ":" +
+           entry.hotkey + ":" + entry.label;
+}
+
+std::string InventoryWidget::NormalizeHotkeyString(const std::string& hotkey) {
+    std::string normalized;
+    normalized.reserve(hotkey.size());
+    for (char ch : hotkey) {
+        if (std::isalnum(static_cast<unsigned char>(ch))) {
+            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        } else if (ch == '-' || ch == '_' || ch == '+' || ch == '.') {
+            normalized.push_back(ch);
+        }
+    }
+    return normalized;
+}
+
+std::optional<std::string> InventoryWidget::NormalizeKeycode(SDL_Keycode keycode) {
+    if (keycode == SDLK_UNKNOWN) {
+        return std::nullopt;
+    }
+
+    if (keycode >= 32 && keycode <= 126) {
+        char key_char = static_cast<char>(keycode);
+        key_char = static_cast<char>(std::tolower(static_cast<unsigned char>(key_char)));
+        return std::string(1, key_char);
+    }
+
+    const char* key_name = SDL_GetKeyName(keycode);
+    if (key_name == nullptr || key_name[0] == '\0') {
+        return std::nullopt;
+    }
+
+    std::string normalized_name;
+    for (const char* it = key_name; *it != '\0'; ++it) {
+        const unsigned char ch = static_cast<unsigned char>(*it);
+        if (std::isalnum(ch)) {
+            normalized_name.push_back(static_cast<char>(std::tolower(ch)));
+        } else if (*it == '-' || *it == '_' || *it == '+') {
+            normalized_name.push_back(*it);
+        }
+    }
+
+    if (normalized_name == "minus" || normalized_name == "kpminus") {
+        return std::string("-");
+    }
+
+    if (normalized_name.empty()) {
+        return std::nullopt;
+    }
+
+    return normalized_name;
+}
+
+const InventoryWidget::EntryBounds* InventoryWidget::FindEntryAtPosition(const ImVec2& position) const {
+    for (const auto& bounds : last_entry_bounds_) {
+        if (position.x >= bounds.min.x && position.x <= bounds.max.x &&
+            position.y >= bounds.min.y && position.y <= bounds.max.y) {
+            return &bounds;
+        }
+    }
+    return nullptr;
+}
+
+bool InventoryWidget::DispatchEntryEvent(const EntryBounds& bounds) {
+    if (bounds.entry.is_category || bounds.entry.is_disabled) {
+        return false;
+    }
+
+    const auto insertion = handled_entries_.insert(bounds.entry_key);
+    if (!insertion.second) {
+        return true;
+    }
+
+    event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(bounds.entry));
+    return true;
+}
+
+bool InventoryWidget::HandleMouseButtonEvent(const SDL_MouseButtonEvent& button_event) {
+    if (button_event.button != SDL_BUTTON_LEFT) {
+        return false;
+    }
+
+    const ImVec2 click_pos(static_cast<float>(button_event.x), static_cast<float>(button_event.y));
+    const EntryBounds* bounds = FindEntryAtPosition(click_pos);
+    if (bounds == nullptr) {
+        return false;
+    }
+
+    return DispatchEntryEvent(*bounds);
+}
+
+bool InventoryWidget::HandleKeyEvent(const SDL_KeyboardEvent& key_event) {
+    if (key_event.repeat != 0) {
+        return false;
+    }
+
+    const std::optional<std::string> hotkey = NormalizeKeycode(key_event.keysym.sym);
+    if (!hotkey.has_value()) {
+        return false;
+    }
+
+    for (const auto& bounds : last_entry_bounds_) {
+        if (bounds.normalized_hotkey.empty()) {
+            continue;
+        }
+        if (bounds.normalized_hotkey == *hotkey) {
+            return DispatchEntryEvent(bounds);
+        }
+    }
+
+    return false;
+}
 
 void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
                                           int column_index,
@@ -124,13 +243,19 @@ void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
 
         const bool selectable_pressed = ImGui::Selectable(label.c_str(), row_selected,
                                                           ImGuiSelectableFlags_None);
-        const bool item_clicked = is_interactable &&
-            (selectable_pressed || ImGui::IsItemClicked(ImGuiMouseButton_Left));
-        if (item_clicked) {
-            event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(entry));
+        if (selectable_pressed && is_interactable) {
+            handled_entries_.insert(BuildEntryKey(column_index, static_cast<int>(row_index), entry));
         }
 
-        last_entry_bounds_.push_back({entry, ImGui::GetItemRectMin(), ImGui::GetItemRectMax()});
+        EntryBounds bounds;
+        bounds.entry = entry;
+        bounds.min = ImGui::GetItemRectMin();
+        bounds.max = ImGui::GetItemRectMax();
+        bounds.column_index = column_index;
+        bounds.row_index = static_cast<int>(row_index);
+        bounds.entry_key = BuildEntryKey(column_index, bounds.row_index, entry);
+        bounds.normalized_hotkey = NormalizeHotkeyString(entry.hotkey);
+        last_entry_bounds_.push_back(bounds);
 
         if (!entry.disabled_msg.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
             ImGui::SetTooltip("%s", entry.disabled_msg.c_str());
@@ -199,58 +324,17 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
     }
 
     ImGui::End();
+
+    handled_entries_.clear();
 }
 
 bool InventoryWidget::HandleEvent(const SDL_Event& event) {
     switch (event.type) {
         case SDL_MOUSEBUTTONDOWN: {
-            if (event.button.button != SDL_BUTTON_LEFT) {
-                return false;
-            }
-
-            const ImVec2 click_pos(static_cast<float>(event.button.x),
-                                   static_cast<float>(event.button.y));
-            for (const auto& bounds : last_entry_bounds_) {
-                if (bounds.entry.is_category || bounds.entry.is_disabled) {
-                    continue;
-                }
-
-                if (click_pos.x >= bounds.min.x && click_pos.x <= bounds.max.x &&
-                    click_pos.y >= bounds.min.y && click_pos.y <= bounds.max.y) {
-                    event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(bounds.entry));
-                    return true;
-                }
-            }
-            return false;
+            return HandleMouseButtonEvent(event.button);
         }
         case SDL_KEYDOWN: {
-            if (event.key.repeat != 0) {
-                return false;
-            }
-
-            const SDL_Keycode keycode = event.key.keysym.sym;
-            char key_char = '\0';
-            if (keycode >= SDLK_a && keycode <= SDLK_z) {
-                key_char = static_cast<char>('a' + (keycode - SDLK_a));
-            } else if (keycode >= SDLK_0 && keycode <= SDLK_9) {
-                key_char = static_cast<char>('0' + (keycode - SDLK_0));
-            }
-
-            if (key_char == '\0') {
-                return false;
-            }
-
-            const std::string hotkey(1, key_char);
-            for (const auto& bounds : last_entry_bounds_) {
-                if (bounds.entry.is_category || bounds.entry.is_disabled) {
-                    continue;
-                }
-                if (bounds.entry.hotkey == hotkey) {
-                    event_bus_adapter_.publish(cataclysm::gui::InventoryItemClickedEvent(bounds.entry));
-                    return true;
-                }
-            }
-            return false;
+            return HandleKeyEvent(event.key);
         }
         default:
             return false;

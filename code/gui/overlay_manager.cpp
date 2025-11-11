@@ -247,20 +247,16 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
     }
 
     if (pImpl_->overlay_has_focus && pImpl_->overlay_renderer) {
-        bool consumed = pImpl_->overlay_renderer->HandleEvent(event);
+        const bool renderer_consumed = pImpl_->overlay_renderer->HandleEvent(event);
 
-        if (!consumed && pImpl_->overlay_ui) {
-            bool widget_consumed = false;
-
+        bool widget_consumed = false;
+        if (pImpl_->overlay_ui) {
             if (pImpl_->inventory_widget_visible_ && pImpl_->inventory_state_) {
-                widget_consumed = pImpl_->overlay_ui->GetInventoryWidget().HandleEvent(event);
-            }
-
-            if (widget_consumed) {
-                consumed = true;
+                widget_consumed = pImpl_->overlay_ui->GetInventoryWidget().HandleEvent(event) || widget_consumed;
             }
         }
 
+        const bool consumed = renderer_consumed || widget_consumed;
         return consumed || !pImpl_->pass_through_enabled;
     }
 
