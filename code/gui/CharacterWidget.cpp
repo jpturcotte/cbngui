@@ -190,7 +190,9 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                         computed_offset += tab_bar->Tabs[tab_index].Width + spacing;
                     }
                 }
-                if (!is_active_tab && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                const bool tab_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                const bool tab_activated = ImGui::IsItemActivated();
+                if (!is_active_tab && (tab_clicked || tab_activated)) {
                     const ImVec2 mouse_pos = ImGui::GetMousePos();
                     const bool within_tab = mouse_pos.x >= tab_min.x && mouse_pos.x <= tab_max.x &&
                                             mouse_pos.y >= tab_min.y && mouse_pos.y <= tab_max.y;
@@ -212,11 +214,9 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                                                                          ImGuiSelectableFlags_SpanAllColumns);
                             RecordRect(row_rects_, tab.id + ":" + std::to_string(j));
                             const InteractiveRect& row_rect = row_rects_.back();
-                            const ImVec2 mouse_pos = ImGui::GetMousePos();
-                            const bool within_row = mouse_pos.x >= row_rect.min.x && mouse_pos.x <= row_rect.max.x &&
-                                                    mouse_pos.y >= row_rect.min.y && mouse_pos.y <= row_rect.max.y;
-                            const bool release_inside = within_row && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-                            if (row_pressed || release_inside) {
+                            const bool row_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                            const bool row_activated = row_pressed || ImGui::IsItemActivated();
+                            if (row_clicked || row_activated) {
                                 event_bus_adapter_.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, j));
                             }
                             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
@@ -257,11 +257,9 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
         const bool button_pressed = ImGui::SmallButton(label);
         RecordRect(command_button_rects_, label);
         const InteractiveRect& button_rect = command_button_rects_.back();
-        const ImVec2 mouse_pos = ImGui::GetMousePos();
-        const bool within_button = mouse_pos.x >= button_rect.min.x && mouse_pos.x <= button_rect.max.x &&
-                                   mouse_pos.y >= button_rect.min.y && mouse_pos.y <= button_rect.max.y;
-        const bool release_inside = within_button && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-        if (button_pressed || release_inside) {
+        const bool button_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+        const bool button_activated = button_pressed || ImGui::IsItemActivated();
+        if (button_clicked || button_activated) {
             event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(command));
         }
         if (!binding.empty()) {
