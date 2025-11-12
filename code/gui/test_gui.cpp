@@ -80,6 +80,7 @@ inventory_overlay_state BuildMockInventoryState() {
         { "Can of Beans", "d", false, false, false, false, false, "" },
         { "First Aid", "", true, false, false, false, false, "" },
         { "Bandage", "e", false, true, false, false, false, "" },
+        { "Emergency Whistle", "-", false, false, false, false, false, "" },
         { "Aspirin", "f", false, false, false, false, true, "Too weak" }
     };
 
@@ -189,9 +190,9 @@ void RenderFrame(ImGuiIO& io,
                  const character_overlay_state& character_state,
                  const ImVec2& mouse_pos,
                  bool mouse_down) {
-    io.MousePos = mouse_pos;
-    io.MouseDown[0] = mouse_down;
-    io.MouseWheel = 0.0f;
+    io.AddMousePosEvent(mouse_pos.x, mouse_pos.y);
+    io.AddMouseButtonEvent(0, mouse_down);
+    io.AddMouseWheelEvent(0.0f, 0.0f);
     ImGui::NewFrame();
     RenderOverlayFrame(overlay_ui, inventory_state, character_state);
     ImGui::Render();
@@ -202,6 +203,7 @@ void RunVisualInteractionTest(ImGuiIO& io,
                               const inventory_overlay_state& inventory_state,
                               const character_overlay_state& character_state,
                               EventRecorder& recorder) {
+    RenderFrame(io, overlay_ui, inventory_state, character_state, ImVec2(-1000.0f, -1000.0f), false);
     RenderFrame(io, overlay_ui, inventory_state, character_state, ImVec2(-1000.0f, -1000.0f), false);
 
     ImVec2 map_min, map_max;
@@ -233,12 +235,35 @@ void RunVisualInteractionTest(ImGuiIO& io,
     assert(recorder.hovered_x >= 0 && recorder.hovered_y >= 0);
     assert(recorder.clicked_x >= 0 && recorder.clicked_y >= 0);
 
-    RenderFrame(io, overlay_ui, inventory_state, character_state, item_target, true);
-    RenderFrame(io, overlay_ui, inventory_state, character_state, item_target, false);
+    SDL_Event click_event{};
+    click_event.type = SDL_MOUSEBUTTONDOWN;
+    click_event.button.type = SDL_MOUSEBUTTONDOWN;
+    click_event.button.button = SDL_BUTTON_LEFT;
+    click_event.button.state = SDL_PRESSED;
+    click_event.button.clicks = 1;
+    click_event.button.x = static_cast<int>(item_target.x);
+    click_event.button.y = static_cast<int>(item_target.y);
 
+    const bool click_consumed = overlay_ui.GetInventoryWidget().HandleEvent(click_event);
+    assert(click_consumed);
     assert(recorder.inventory_item_clicked);
     assert(recorder.last_inventory_entry.label == "Water");
     assert(recorder.last_inventory_entry.hotkey == "c");
+
+    recorder.inventory_item_clicked = false;
+
+    SDL_Event minus_key_event{};
+    minus_key_event.type = SDL_KEYDOWN;
+    minus_key_event.key.type = SDL_KEYDOWN;
+    minus_key_event.key.state = SDL_PRESSED;
+    minus_key_event.key.repeat = 0;
+    minus_key_event.key.keysym.scancode = SDL_SCANCODE_MINUS;
+    minus_key_event.key.keysym.sym = SDLK_MINUS;
+
+    const bool minus_consumed = overlay_ui.GetInventoryWidget().HandleEvent(minus_key_event);
+    assert(minus_consumed);
+    assert(recorder.inventory_item_clicked);
+    assert(recorder.last_inventory_entry.hotkey == "-");
 
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, true);
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, false);

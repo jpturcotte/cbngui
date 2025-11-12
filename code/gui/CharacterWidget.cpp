@@ -192,13 +192,13 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                 }
                 const bool tab_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
                 const bool tab_activated = ImGui::IsItemActivated();
-                if (!is_active_tab && (tab_clicked || tab_activated)) {
-                    const ImVec2 mouse_pos = ImGui::GetMousePos();
-                    const bool within_tab = mouse_pos.x >= tab_min.x && mouse_pos.x <= tab_max.x &&
-                                            mouse_pos.y >= tab_min.y && mouse_pos.y <= tab_max.y;
-                    if (within_tab) {
-                        event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(tab.id));
-                    }
+                const bool tab_mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+                const ImVec2 mouse_pos = ImGui::GetMousePos();
+                const bool within_tab = mouse_pos.x >= tab_min.x && mouse_pos.x <= tab_max.x &&
+                                        mouse_pos.y >= tab_min.y && mouse_pos.y <= tab_max.y;
+                const bool tab_clicked_by_bounds = tab_mouse_released && within_tab;
+                if (!is_active_tab && (tab_clicked || tab_activated || tab_clicked_by_bounds)) {
+                    event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(tab.id));
                 }
                 if (tab_open) {
                     if (ImGui::BeginTable("CharacterTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
@@ -216,7 +216,13 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                             const InteractiveRect& row_rect = row_rects_.back();
                             const bool row_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
                             const bool row_activated = row_pressed || ImGui::IsItemActivated();
-                            if (row_clicked || row_activated) {
+                            const bool row_mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+                            const ImVec2 row_mouse_pos = ImGui::GetMousePos();
+                            const bool row_bounds_clicked =
+                                row_mouse_released &&
+                                row_mouse_pos.x >= row_rect.min.x && row_mouse_pos.x <= row_rect.max.x &&
+                                row_mouse_pos.y >= row_rect.min.y && row_mouse_pos.y <= row_rect.max.y;
+                            if (row_clicked || row_activated || row_bounds_clicked) {
                                 event_bus_adapter_.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, j));
                             }
                             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
@@ -259,7 +265,13 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
         const InteractiveRect& button_rect = command_button_rects_.back();
         const bool button_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
         const bool button_activated = button_pressed || ImGui::IsItemActivated();
-        if (button_clicked || button_activated) {
+        const bool button_mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+        const ImVec2 button_mouse_pos = ImGui::GetMousePos();
+        const bool button_bounds_clicked =
+            button_mouse_released &&
+            button_mouse_pos.x >= button_rect.min.x && button_mouse_pos.x <= button_rect.max.x &&
+            button_mouse_pos.y >= button_rect.min.y && button_mouse_pos.y <= button_rect.max.y;
+        if (button_clicked || button_activated || button_bounds_clicked) {
             event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(command));
         }
         if (!binding.empty()) {
