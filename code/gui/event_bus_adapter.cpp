@@ -126,9 +126,19 @@ void EventBusAdapter::publishMapTileClicked(int x, int y) {
     events_published_.fetch_add(1);
 }
 
+void EventBusAdapter::publishInventoryKeyInput(const SDL_KeyboardEvent& key_event) {
+    InventoryKeyInputEvent event(key_event);
+    event_bus_.publish(event);
+    events_published_.fetch_add(1);
+
+    std::cout << "Published inventory key input event: scancode "
+              << static_cast<int>(key_event.keysym.scancode)
+              << " (sym: " << static_cast<int>(key_event.keysym.sym) << ")" << std::endl;
+}
+
 std::shared_ptr<EventSubscription> EventBusAdapter::subscribeToStatusChange(
     std::function<void(const GameplayStatusChangeEvent&)> callback) {
-    
+
     auto subscription = event_bus_.subscribe<GameplayStatusChangeEvent>(
         [this, callback = std::move(callback)](const GameplayStatusChangeEvent& event) {
             callback(event);

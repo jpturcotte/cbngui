@@ -22,6 +22,7 @@ struct EventRecorder {
     bool map_tile_hovered = false;
     bool map_tile_clicked = false;
     bool inventory_item_clicked = false;
+    bool inventory_key_input = false;
     bool character_tab_requested = false;
     bool character_row_activated = false;
     bool character_command_received = false;
@@ -39,6 +40,7 @@ struct EventRecorder {
     size_t last_row_index = 0;
     cataclysm::gui::CharacterCommand last_character_command = cataclysm::gui::CharacterCommand::HELP;
     inventory_entry last_inventory_entry;
+    SDL_KeyboardEvent last_inventory_key_event{};
     std::string last_overlay_id;
     bool last_overlay_modal = false;
     bool last_overlay_cancelled = false;
@@ -251,6 +253,7 @@ void RunVisualInteractionTest(ImGuiIO& io,
     assert(recorder.last_inventory_entry.hotkey == "c");
 
     recorder.inventory_item_clicked = false;
+    recorder.inventory_key_input = false;
 
     SDL_Event minus_key_event{};
     minus_key_event.type = SDL_KEYDOWN;
@@ -262,8 +265,9 @@ void RunVisualInteractionTest(ImGuiIO& io,
 
     const bool minus_consumed = overlay_ui.GetInventoryWidget().HandleEvent(minus_key_event);
     assert(minus_consumed);
-    assert(recorder.inventory_item_clicked);
-    assert(recorder.last_inventory_entry.hotkey == "-");
+    assert(recorder.inventory_key_input);
+    assert(recorder.last_inventory_key_event.keysym.sym == SDLK_MINUS);
+    assert(!recorder.inventory_item_clicked);
 
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, true);
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, false);
@@ -361,6 +365,12 @@ int main() {
         [&recorder](const cataclysm::gui::InventoryItemClickedEvent &event) {
             recorder.inventory_item_clicked = true;
             recorder.last_inventory_entry = event.getEntry();
+        });
+
+    auto inventory_key_sub = event_bus.subscribe<cataclysm::gui::InventoryKeyInputEvent>(
+        [&recorder](const cataclysm::gui::InventoryKeyInputEvent &event) {
+            recorder.inventory_key_input = true;
+            recorder.last_inventory_key_event = event.getKeyEvent();
         });
 
     auto tab_sub = event_bus.subscribe<cataclysm::gui::CharacterTabRequestedEvent>(

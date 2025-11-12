@@ -3,6 +3,7 @@
 
 #include "event_bus.h"
 #include "InventoryOverlayState.h"
+#include <SDL.h>
 #include <string>
 #include <memory>
 #include <vector>
@@ -444,6 +445,29 @@ public:
 
 private:
     inventory_entry entry_;
+};
+
+/**
+ * Event: Inventory key input
+ * Published when the overlay forwards a keyboard event to the inventory input context.
+ * Subscribers: gameplay input adapters
+ */
+class InventoryKeyInputEvent : public GuiEvent {
+public:
+    explicit InventoryKeyInputEvent(const SDL_KeyboardEvent& key_event)
+        : GuiEvent("inventory_widget"), key_event_(key_event) {}
+
+    std::string getEventTypeName() const override { return "inventory_key_input"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<InventoryKeyInputEvent>(key_event_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const SDL_KeyboardEvent& getKeyEvent() const { return key_event_; }
+
+private:
+    SDL_KeyboardEvent key_event_{};
 };
 
 class CharacterTabRequestedEvent : public GuiEvent {

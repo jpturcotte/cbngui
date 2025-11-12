@@ -114,6 +114,13 @@ public:
      * @param y The y-coordinate of the tile
      */
     void publishMapTileClicked(int x, int y);
+
+    /**
+     * Publish an inventory key input event.
+     * Called when the inventory widget forwards a keyboard event to the game.
+     * @param key_event SDL keyboard event associated with the input
+     */
+    void publishInventoryKeyInput(const SDL_KeyboardEvent& key_event);
     
     // =============================================================================
     // Gameplay Event Subscription Methods

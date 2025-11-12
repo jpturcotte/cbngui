@@ -134,6 +134,7 @@ The Cataclysm: Bright Nights (CBN) ImGui front end currently ships with a terrai
 - Implement `handle_event` to map ImGui interactions back to the game:
   - Store row bounds when rendering so mouse clicks can map to row indexes.
   - On click, call a helper that injects the equivalent action (e.g., set selector’s highlight, send Enter). Use existing `send_game_input` facilities from other widgets.
+  - Forward keyboard input by publishing an `InventoryKeyInputEvent` through the event bus so the gameplay `input_context` resolves the active binding.
 
 ### 5. Lifecycle hooks
 - In the inventory selector’s constructor/destructor or in `execute()`:
