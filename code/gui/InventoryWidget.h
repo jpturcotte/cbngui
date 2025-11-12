@@ -1,8 +1,6 @@
 #ifndef INVENTORY_WIDGET_H
 #define INVENTORY_WIDGET_H
 
-#include <functional>
-#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -41,15 +39,12 @@ private:
         int column_index = 0;
         int row_index = 0;
         std::string entry_key;
-        std::string normalized_hotkey;
     };
     std::vector<EntryBounds> last_entry_bounds_;
     std::unordered_set<std::string> handled_entries_;
 
     void DrawInventoryColumn(const inventory_column& column, int column_index, int active_column);
     static std::string BuildEntryKey(int column_index, int row_index, const inventory_entry& entry);
-    static std::string NormalizeHotkeyString(const std::string& hotkey);
-    static std::optional<std::string> NormalizeKeycode(SDL_Keycode keycode);
     const EntryBounds* FindEntryAtPosition(const ImVec2& position) const;
     bool DispatchEntryEvent(const EntryBounds& bounds);
     bool HandleMouseButtonEvent(const SDL_MouseButtonEvent& button_event);

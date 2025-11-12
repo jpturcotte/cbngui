@@ -65,6 +65,28 @@ The Cataclysm: Bright Nights (CBN) ImGui front end currently ships with a terrai
   2. Use `input_context::register_action` hotkeys to ensure the ImGui widget respects rebinding.
   3. Any event the widget does not consume should be returned so the standard inventory selector handles it.
 
+## External integration
+- Third-party tooling can observe inventory interactions by subscribing to the GUI event bus the same way in-engine systems do. The widget publishes `InventoryItemClickedEvent` payloads when rows are activated via the mouse and forwards raw SDL keyboard data through `InventoryKeyInputEvent` so that downstream consumers can reinterpret the press according to their bindings.
+- To listen for these notifications, initialize a `cataclysm::gui::EventBusAdapter` (or reuse the global adapter), then register callbacks with the strongly typed `event_bus.subscribe<EventType>` helper. Example skeleton:
+  ```cpp
+  cataclysm::gui::EventBus event_bus;
+  cataclysm::gui::EventBusAdapter adapter(event_bus);
+  adapter.initialize();
+
+  auto inventory_click_subscription = event_bus.subscribe<cataclysm::gui::InventoryItemClickedEvent>(
+      [](const cataclysm::gui::InventoryItemClickedEvent &evt) {
+          const inventory_entry &entry = evt.getEntry();
+          // mirror highlight or analytics hooks here
+      });
+
+  auto inventory_key_subscription = event_bus.subscribe<cataclysm::gui::InventoryKeyInputEvent>(
+      [](const cataclysm::gui::InventoryKeyInputEvent &evt) {
+          const SDL_KeyboardEvent &raw = evt.getKeyEvent();
+          // forward to a remote client or replay harness
+      });
+  ```
+- External applications embedding the overlay should store the returned subscription handles for the lifetime of the listener. Disposing the handles (or destroying the adapter) automatically unsubscribes the callbacks and stops the event flow.
+
 ## Detailed Implementation Plan
 
 ### 1. Data definitions
@@ -134,6 +156,7 @@ The Cataclysm: Bright Nights (CBN) ImGui front end currently ships with a terrai
 - Implement `handle_event` to map ImGui interactions back to the game:
   - Store row bounds when rendering so mouse clicks can map to row indexes.
   - On click, call a helper that injects the equivalent action (e.g., set selector’s highlight, send Enter). Use existing `send_game_input` facilities from other widgets.
+  - Forward keyboard events as `InventoryKeyInputEvent` instances so the existing inventory `input_context` interprets rebinding-aware actions.
 
 ### 5. Lifecycle hooks
 - In the inventory selector’s constructor/destructor or in `execute()`:

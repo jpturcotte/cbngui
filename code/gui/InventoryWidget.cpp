@@ -5,8 +5,6 @@
 #include <SDL.h>
 
 #include <algorithm>
-#include <cctype>
-#include <optional>
 #include <string>
 
 namespace {
@@ -58,56 +56,6 @@ std::string InventoryWidget::BuildEntryKey(int column_index,
            entry.hotkey + ":" + entry.label;
 }
 
-std::string InventoryWidget::NormalizeHotkeyString(const std::string& hotkey) {
-    std::string normalized;
-    normalized.reserve(hotkey.size());
-    for (char ch : hotkey) {
-        if (std::isalnum(static_cast<unsigned char>(ch))) {
-            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-        } else if (ch == '-' || ch == '_' || ch == '+' || ch == '.') {
-            normalized.push_back(ch);
-        }
-    }
-    return normalized;
-}
-
-std::optional<std::string> InventoryWidget::NormalizeKeycode(SDL_Keycode keycode) {
-    if (keycode == SDLK_UNKNOWN) {
-        return std::nullopt;
-    }
-
-    if (keycode >= 32 && keycode <= 126) {
-        char key_char = static_cast<char>(keycode);
-        key_char = static_cast<char>(std::tolower(static_cast<unsigned char>(key_char)));
-        return std::string(1, key_char);
-    }
-
-    const char* key_name = SDL_GetKeyName(keycode);
-    if (key_name == nullptr || key_name[0] == '\0') {
-        return std::nullopt;
-    }
-
-    std::string normalized_name;
-    for (const char* it = key_name; *it != '\0'; ++it) {
-        const unsigned char ch = static_cast<unsigned char>(*it);
-        if (std::isalnum(ch)) {
-            normalized_name.push_back(static_cast<char>(std::tolower(ch)));
-        } else if (*it == '-' || *it == '_' || *it == '+') {
-            normalized_name.push_back(*it);
-        }
-    }
-
-    if (normalized_name == "minus" || normalized_name == "kpminus") {
-        return std::string("-");
-    }
-
-    if (normalized_name.empty()) {
-        return std::nullopt;
-    }
-
-    return normalized_name;
-}
-
 const InventoryWidget::EntryBounds* InventoryWidget::FindEntryAtPosition(const ImVec2& position) const {
     for (const auto& bounds : last_entry_bounds_) {
         if (position.x >= bounds.min.x && position.x <= bounds.max.x &&
@@ -151,21 +99,8 @@ bool InventoryWidget::HandleKeyEvent(const SDL_KeyboardEvent& key_event) {
         return false;
     }
 
-    const std::optional<std::string> hotkey = NormalizeKeycode(key_event.keysym.sym);
-    if (!hotkey.has_value()) {
-        return false;
-    }
-
-    for (const auto& bounds : last_entry_bounds_) {
-        if (bounds.normalized_hotkey.empty()) {
-            continue;
-        }
-        if (bounds.normalized_hotkey == *hotkey) {
-            return DispatchEntryEvent(bounds);
-        }
-    }
-
-    return false;
+    event_bus_adapter_.publish(cataclysm::gui::InventoryKeyInputEvent(key_event));
+    return true;
 }
 
 void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
@@ -252,7 +187,6 @@ void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
         bounds.column_index = column_index;
         bounds.row_index = static_cast<int>(row_index);
         bounds.entry_key = BuildEntryKey(column_index, bounds.row_index, entry);
-        bounds.normalized_hotkey = NormalizeHotkeyString(entry.hotkey);
         last_entry_bounds_.push_back(bounds);
 
         if (should_dispatch_selection) {

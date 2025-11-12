@@ -22,6 +22,7 @@ struct EventRecorder {
     bool map_tile_hovered = false;
     bool map_tile_clicked = false;
     bool inventory_item_clicked = false;
+    bool inventory_key_forwarded = false;
     bool character_tab_requested = false;
     bool character_row_activated = false;
     bool character_command_received = false;
@@ -35,6 +36,9 @@ struct EventRecorder {
     int hovered_y = -1;
     int clicked_x = -1;
     int clicked_y = -1;
+    SDL_Keycode last_forwarded_keycode = SDLK_UNKNOWN;
+    SDL_Scancode last_forwarded_scancode = SDL_SCANCODE_UNKNOWN;
+    SDL_Keymod last_forwarded_mod = KMOD_NONE;
     std::string last_tab_id;
     size_t last_row_index = 0;
     cataclysm::gui::CharacterCommand last_character_command = cataclysm::gui::CharacterCommand::HELP;
@@ -251,6 +255,10 @@ void RunVisualInteractionTest(ImGuiIO& io,
     assert(recorder.last_inventory_entry.hotkey == "c");
 
     recorder.inventory_item_clicked = false;
+    recorder.inventory_key_forwarded = false;
+    recorder.last_forwarded_keycode = SDLK_UNKNOWN;
+    recorder.last_forwarded_scancode = SDL_SCANCODE_UNKNOWN;
+    recorder.last_forwarded_mod = KMOD_NONE;
 
     SDL_Event minus_key_event{};
     minus_key_event.type = SDL_KEYDOWN;
@@ -262,8 +270,11 @@ void RunVisualInteractionTest(ImGuiIO& io,
 
     const bool minus_consumed = overlay_ui.GetInventoryWidget().HandleEvent(minus_key_event);
     assert(minus_consumed);
-    assert(recorder.inventory_item_clicked);
-    assert(recorder.last_inventory_entry.hotkey == "-");
+    assert(recorder.inventory_key_forwarded);
+    assert(recorder.last_forwarded_keycode == SDLK_MINUS);
+    assert(recorder.last_forwarded_scancode == SDL_SCANCODE_MINUS);
+    assert(recorder.last_forwarded_mod == KMOD_NONE);
+    assert(!recorder.inventory_item_clicked);
 
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, true);
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, false);
@@ -363,6 +374,14 @@ int main() {
             recorder.last_inventory_entry = event.getEntry();
         });
 
+    auto inventory_key_sub = event_bus.subscribe<cataclysm::gui::InventoryKeyInputEvent>(
+        [&recorder](const cataclysm::gui::InventoryKeyInputEvent &event) {
+            recorder.inventory_key_forwarded = true;
+            recorder.last_forwarded_keycode = event.getKeyEvent().keysym.sym;
+            recorder.last_forwarded_scancode = event.getKeyEvent().keysym.scancode;
+            recorder.last_forwarded_mod = static_cast<SDL_Keymod>(event.getKeyEvent().keysym.mod);
+        });
+
     auto tab_sub = event_bus.subscribe<cataclysm::gui::CharacterTabRequestedEvent>(
         [&recorder](const cataclysm::gui::CharacterTabRequestedEvent &event) {
             recorder.character_tab_requested = true;
@@ -435,6 +454,7 @@ int main() {
     hover_sub->unsubscribe();
     click_sub->unsubscribe();
     inventory_sub->unsubscribe();
+    inventory_key_sub->unsubscribe();
     tab_sub->unsubscribe();
     row_sub->unsubscribe();
     overlay_open_sub->unsubscribe();
