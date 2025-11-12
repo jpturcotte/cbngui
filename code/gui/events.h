@@ -8,6 +8,7 @@
 #include <vector>
 #include <functional>
 #include <chrono>
+#include <SDL.h>
 
 namespace cataclysm {
 namespace gui {
@@ -444,6 +445,29 @@ public:
 
 private:
     inventory_entry entry_;
+};
+
+/**
+ * Event: Inventory Key Input
+ * Published when the inventory widget forwards a keyboard event to the game.
+ * Subscribers: inventory_ui input routing
+ */
+class InventoryKeyInputEvent : public GuiEvent {
+public:
+    explicit InventoryKeyInputEvent(const SDL_KeyboardEvent& key_event)
+        : GuiEvent("inventory_widget"), key_event_(key_event) {}
+
+    std::string getEventTypeName() const override { return "inventory_key_input"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<InventoryKeyInputEvent>(key_event_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const SDL_KeyboardEvent& getKeyEvent() const { return key_event_; }
+
+private:
+    SDL_KeyboardEvent key_event_{};
 };
 
 class CharacterTabRequestedEvent : public GuiEvent {
