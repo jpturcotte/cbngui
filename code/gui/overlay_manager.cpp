@@ -263,6 +263,10 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
     return false;
 }
 
+namespace {
+constexpr const char* kOverlayLifecycleId = "overlay_ui";
+}
+
 void OverlayManager::Open() {
     if (!pImpl_->is_initialized || !pImpl_->config.enabled || pImpl_->is_open) {
         return;
@@ -270,6 +274,11 @@ void OverlayManager::Open() {
 
     pImpl_->is_open = true;
     pImpl_->UpdateFocusState();
+
+    if (pImpl_->event_bus_adapter) {
+        const bool is_modal = !pImpl_->pass_through_enabled;
+        pImpl_->event_bus_adapter->publishOverlayOpen(kOverlayLifecycleId, is_modal);
+    }
 
     if (pImpl_->redraw_callback) {
         pImpl_->redraw_callback();
@@ -283,6 +292,10 @@ void OverlayManager::Close() {
 
     pImpl_->is_open = false;
     pImpl_->UpdateFocusState();
+
+    if (pImpl_->event_bus_adapter) {
+        pImpl_->event_bus_adapter->publishOverlayClose(kOverlayLifecycleId, false);
+    }
 
     if (pImpl_->redraw_callback) {
         pImpl_->redraw_callback();
