@@ -243,9 +243,7 @@ void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
 
         const bool selectable_pressed = ImGui::Selectable(label.c_str(), row_selected,
                                                           ImGuiSelectableFlags_None);
-        if (selectable_pressed && is_interactable) {
-            handled_entries_.insert(BuildEntryKey(column_index, static_cast<int>(row_index), entry));
-        }
+        const bool should_dispatch_selection = selectable_pressed && is_interactable;
 
         EntryBounds bounds;
         bounds.entry = entry;
@@ -256,6 +254,10 @@ void InventoryWidget::DrawInventoryColumn(const inventory_column& column,
         bounds.entry_key = BuildEntryKey(column_index, bounds.row_index, entry);
         bounds.normalized_hotkey = NormalizeHotkeyString(entry.hotkey);
         last_entry_bounds_.push_back(bounds);
+
+        if (should_dispatch_selection) {
+            DispatchEntryEvent(bounds);
+        }
 
         if (!entry.disabled_msg.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
             ImGui::SetTooltip("%s", entry.disabled_msg.c_str());
