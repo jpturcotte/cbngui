@@ -185,9 +185,12 @@ bool OverlayRenderer::HandleEvent(const SDL_Event& event) {
         return false;
     }
     
-    ImGui_ImplSDL2_ProcessEvent(&event);
+    const bool consumed_by_imgui = ImGui_ImplSDL2_ProcessEvent(&event);
 
-    return pImpl_->io && (pImpl_->io->WantCaptureMouse || pImpl_->io->WantCaptureKeyboard);
+    const bool wants_capture =
+        pImpl_->io && (pImpl_->io->WantCaptureMouse || pImpl_->io->WantCaptureKeyboard);
+
+    return consumed_by_imgui || wants_capture;
 }
 
 void OverlayRenderer::OnWindowResized(int width, int height) {
