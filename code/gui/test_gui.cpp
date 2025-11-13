@@ -5,6 +5,7 @@
 
 #include <SDL.h>
 
+#include "input_manager.h"
 #include "CharacterOverlayState.h"
 #include "CharacterWidget.h"
 #include "InventoryOverlayState.h"
@@ -17,6 +18,120 @@
 #include "overlay_ui.h"
 
 namespace {
+
+void RunInputManagerEventRoutingTests() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    BN::GUI::InputManager::InputSettings settings;
+    settings.pass_through_enabled = true;
+    settings.prevent_game_input_when_gui_focused = true;
+
+    BN::GUI::InputManager manager(settings);
+    assert(manager.Initialize());
+    manager.SetGUIAreaBounds(0, 0, 256, 256);
+    manager.SetFocusState(BN::GUI::InputManager::FocusState::GUI, "tests");
+
+    bool key_press_called = false;
+    bool key_release_called = false;
+    bool mouse_press_called = false;
+
+    manager.RegisterHandler(
+        BN::GUI::InputManager::EventType::KEYBOARD_PRESS,
+        [&](const BN::GUI::GUIEvent&) {
+            key_press_called = true;
+            return true;
+        },
+        BN::GUI::InputManager::Priority::NORMAL);
+
+    manager.RegisterHandler(
+        BN::GUI::InputManager::EventType::KEYBOARD_RELEASE,
+        [&](const BN::GUI::GUIEvent&) {
+            key_release_called = true;
+            return true;
+        },
+        BN::GUI::InputManager::Priority::NORMAL);
+
+    manager.RegisterHandler(
+        BN::GUI::InputManager::EventType::MOUSE_BUTTON_PRESS,
+        [&](const BN::GUI::GUIEvent&) {
+            mouse_press_called = true;
+            return true;
+        },
+        BN::GUI::InputManager::Priority::HIGH);
+
+    auto stats = manager.GetStatistics();
+    assert(stats.active_handlers.load() == 3);
+
+    SDL_Event key_down{};
+    key_down.type = SDL_KEYDOWN;
+    key_down.key.type = SDL_KEYDOWN;
+    key_down.key.state = SDL_PRESSED;
+    key_down.key.repeat = 0;
+    key_down.key.keysym.sym = SDLK_a;
+    key_down.key.keysym.scancode = SDL_SCANCODE_A;
+    key_down.key.keysym.mod = KMOD_NONE;
+
+    assert(manager.ProcessEvent(key_down));
+    assert(key_press_called);
+    assert(!key_release_called);
+    assert(!mouse_press_called);
+
+    key_press_called = false;
+
+    SDL_Event key_up{};
+    key_up.type = SDL_KEYUP;
+    key_up.key.type = SDL_KEYUP;
+    key_up.key.state = SDL_RELEASED;
+    key_up.key.keysym.sym = SDLK_a;
+    key_up.key.keysym.scancode = SDL_SCANCODE_A;
+    key_up.key.keysym.mod = KMOD_NONE;
+
+    assert(manager.ProcessEvent(key_up));
+    assert(!key_press_called);
+    assert(key_release_called);
+
+    key_release_called = false;
+
+    SDL_Event mouse_button{};
+    mouse_button.type = SDL_MOUSEBUTTONDOWN;
+    mouse_button.button.type = SDL_MOUSEBUTTONDOWN;
+    mouse_button.button.button = SDL_BUTTON_LEFT;
+    mouse_button.button.state = SDL_PRESSED;
+    mouse_button.button.x = 128;
+    mouse_button.button.y = 128;
+
+    assert(manager.ProcessEvent(mouse_button));
+    assert(mouse_press_called);
+
+    mouse_press_called = false;
+
+    manager.SetFocusState(BN::GUI::InputManager::FocusState::GAME, "game");
+
+    key_press_called = false;
+    assert(!manager.ProcessEvent(key_down));
+    assert(!key_press_called);
+
+    auto updated_settings = manager.GetSettings();
+    updated_settings.pass_through_enabled = false;
+    manager.UpdateSettings(updated_settings);
+
+    key_press_called = false;
+    assert(manager.ProcessEvent(key_down));
+    assert(key_press_called);
+
+    mouse_button.button.x = 600;
+    mouse_button.button.y = 600;
+    assert(!manager.ProcessEvent(mouse_button));
+    assert(!mouse_press_called);
+
+    manager.Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
 
 struct EventRecorder {
     bool map_tile_hovered = false;
@@ -375,6 +490,8 @@ void RunOverlayLifecycleTest(cataclysm::gui::EventBusAdapter &adapter, EventReco
 }  // namespace
 
 int main() {
+    RunInputManagerEventRoutingTests();
+
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize = ImVec2(1024.0f, 768.0f);
