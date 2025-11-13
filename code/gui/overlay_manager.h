@@ -82,6 +82,8 @@ private:
     void LogError(const std::string& error) const;
 
     bool IsGraphicalBuild() const;
+
+    bool IsRegisteredWithUiManager() const;
 };
 
 #endif // OVERLAY_MANAGER_H

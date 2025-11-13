@@ -14,8 +14,10 @@
 #include "event_bus.h"
 #include "events.h"
 #include "imgui.h"
+#include "overlay_manager.h"
 #include "map_widget.h"
 #include "overlay_ui.h"
+#include "ui_manager.h"
 
 namespace {
 
@@ -179,6 +181,50 @@ void RunInputManagerEventRoutingTests() {
     assert(keyboard_handler_invoked);
 
     shared_manager.Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+void RunOverlayManagerUiIntegrationTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window* window = SDL_CreateWindow(
+        "overlay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = true;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    auto& ui_manager = cataclysm::gui::UiManager::instance();
+    assert(ui_manager.registered_count() == 0);
+    assert(!overlay_manager.IsRegisteredWithUiManager());
+
+    overlay_manager.Open();
+    assert(overlay_manager.IsRegisteredWithUiManager());
+    assert(ui_manager.registered_count() == 1);
+
+    overlay_manager.Close();
+    assert(!overlay_manager.IsRegisteredWithUiManager());
+    assert(ui_manager.registered_count() == 0);
+
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
@@ -540,6 +586,7 @@ void RunOverlayLifecycleTest(cataclysm::gui::EventBusAdapter &adapter, EventReco
 
 int main() {
     RunInputManagerEventRoutingTests();
+    RunOverlayManagerUiIntegrationTest();
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
