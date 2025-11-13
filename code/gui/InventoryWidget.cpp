@@ -5,6 +5,7 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 namespace {
@@ -92,6 +93,90 @@ bool InventoryWidget::HandleMouseButtonEvent(const SDL_MouseButtonEvent& button_
     }
 
     return DispatchEntryEvent(*bounds);
+}
+
+bool InventoryWidget::HandleMouseWheelEvent(const SDL_MouseWheelEvent& wheel_event) {
+    const int direction_multiplier =
+        (wheel_event.direction == SDL_MOUSEWHEEL_FLIPPED) ? -1 : 1;
+
+    auto resolve_delta = [](float precise_value, int coarse_value) {
+        if (precise_value != 0.0f) {
+            return precise_value;
+        }
+        return static_cast<float>(coarse_value);
+    };
+
+    float precise_vertical = 0.0f;
+    float precise_horizontal = 0.0f;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    precise_vertical = wheel_event.preciseY;
+    precise_horizontal = wheel_event.preciseX;
+#endif
+
+    const float vertical_delta =
+        resolve_delta(precise_vertical, wheel_event.y) * direction_multiplier;
+    const float horizontal_delta =
+        resolve_delta(precise_horizontal, wheel_event.x) * direction_multiplier;
+
+    bool consumed = false;
+
+    auto dispatch_delta = [&](float delta,
+                              float& accumulator,
+                              SDL_Scancode positive_scancode,
+                              SDL_Keycode positive_key,
+                              SDL_Scancode negative_scancode,
+                              SDL_Keycode negative_key) {
+        if (delta == 0.0f) {
+            return;
+        }
+
+        accumulator += delta;
+
+        int steps = 0;
+        while (accumulator >= 1.0f) {
+            ++steps;
+            accumulator -= 1.0f;
+        }
+        while (accumulator <= -1.0f) {
+            --steps;
+            accumulator += 1.0f;
+        }
+
+        if (steps == 0) {
+            return;
+        }
+
+        consumed = true;
+        SDL_KeyboardEvent key_event{};
+        key_event.type = SDL_KEYDOWN;
+        key_event.timestamp = wheel_event.timestamp;
+        key_event.windowID = wheel_event.windowID;
+        key_event.state = SDL_PRESSED;
+        key_event.repeat = 0;
+        key_event.keysym.mod = KMOD_NONE;
+
+        const int iterations = std::abs(steps);
+        for (int i = 0; i < iterations; ++i) {
+            key_event.keysym.scancode = (steps > 0) ? positive_scancode : negative_scancode;
+            key_event.keysym.sym = (steps > 0) ? positive_key : negative_key;
+            event_bus_adapter_.publish(cataclysm::gui::InventoryKeyInputEvent(key_event));
+        }
+    };
+
+    dispatch_delta(vertical_delta,
+                   vertical_wheel_remainder_,
+                   SDL_SCANCODE_UP,
+                   SDLK_UP,
+                   SDL_SCANCODE_DOWN,
+                   SDLK_DOWN);
+    dispatch_delta(horizontal_delta,
+                   horizontal_wheel_remainder_,
+                   SDL_SCANCODE_RIGHT,
+                   SDLK_RIGHT,
+                   SDL_SCANCODE_LEFT,
+                   SDLK_LEFT);
+
+    return consumed;
 }
 
 bool InventoryWidget::HandleKeyEvent(const SDL_KeyboardEvent& key_event) {
@@ -268,6 +353,9 @@ bool InventoryWidget::HandleEvent(const SDL_Event& event) {
     switch (event.type) {
         case SDL_MOUSEBUTTONDOWN: {
             return HandleMouseButtonEvent(event.button);
+        }
+        case SDL_MOUSEWHEEL: {
+            return HandleMouseWheelEvent(event.wheel);
         }
         case SDL_KEYDOWN: {
             return HandleKeyEvent(event.key);

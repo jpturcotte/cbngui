@@ -276,6 +276,44 @@ void RunVisualInteractionTest(ImGuiIO& io,
     assert(recorder.last_forwarded_mod == KMOD_NONE);
     assert(!recorder.inventory_item_clicked);
 
+    recorder.inventory_key_forwarded = false;
+    recorder.last_forwarded_keycode = SDLK_UNKNOWN;
+    recorder.last_forwarded_scancode = SDL_SCANCODE_UNKNOWN;
+    recorder.last_forwarded_mod = KMOD_NONE;
+
+    SDL_Event wheel_event{};
+    wheel_event.type = SDL_MOUSEWHEEL;
+    wheel_event.wheel.type = SDL_MOUSEWHEEL;
+    wheel_event.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    wheel_event.wheel.y = 1;
+    wheel_event.wheel.preciseY = 0.0f;
+
+    const bool wheel_consumed = overlay_ui.GetInventoryWidget().HandleEvent(wheel_event);
+    assert(wheel_consumed);
+    assert(recorder.inventory_key_forwarded);
+    assert(recorder.last_forwarded_keycode == SDLK_UP);
+    assert(recorder.last_forwarded_scancode == SDL_SCANCODE_UP);
+    assert(recorder.last_forwarded_mod == KMOD_NONE);
+
+    recorder.inventory_key_forwarded = false;
+    recorder.last_forwarded_keycode = SDLK_UNKNOWN;
+    recorder.last_forwarded_scancode = SDL_SCANCODE_UNKNOWN;
+    recorder.last_forwarded_mod = KMOD_NONE;
+
+    SDL_Event precise_wheel_event{};
+    precise_wheel_event.type = SDL_MOUSEWHEEL;
+    precise_wheel_event.wheel.type = SDL_MOUSEWHEEL;
+    precise_wheel_event.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    precise_wheel_event.wheel.preciseY = 1.0f;
+
+    const bool precise_wheel_consumed =
+        overlay_ui.GetInventoryWidget().HandleEvent(precise_wheel_event);
+    assert(precise_wheel_consumed);
+    assert(recorder.inventory_key_forwarded);
+    assert(recorder.last_forwarded_keycode == SDLK_UP);
+    assert(recorder.last_forwarded_scancode == SDL_SCANCODE_UP);
+    assert(recorder.last_forwarded_mod == KMOD_NONE);
+
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, true);
     RenderFrame(io, overlay_ui, inventory_state, character_state, tab_target, false);
 
