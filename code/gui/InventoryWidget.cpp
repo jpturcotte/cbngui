@@ -106,10 +106,17 @@ bool InventoryWidget::HandleMouseWheelEvent(const SDL_MouseWheelEvent& wheel_eve
         return static_cast<float>(coarse_value);
     };
 
+    float precise_vertical = 0.0f;
+    float precise_horizontal = 0.0f;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    precise_vertical = wheel_event.preciseY;
+    precise_horizontal = wheel_event.preciseX;
+#endif
+
     const float vertical_delta =
-        resolve_delta(wheel_event.preciseY, wheel_event.y) * direction_multiplier;
+        resolve_delta(precise_vertical, wheel_event.y) * direction_multiplier;
     const float horizontal_delta =
-        resolve_delta(wheel_event.preciseX, wheel_event.x) * direction_multiplier;
+        resolve_delta(precise_horizontal, wheel_event.x) * direction_multiplier;
 
     bool consumed = false;
 
