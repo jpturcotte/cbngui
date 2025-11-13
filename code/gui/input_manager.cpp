@@ -150,12 +150,13 @@ bool InputManager::ProcessEvent(const SDL_Event& event) {
     
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
         consumed = ProcessKeyboardEvent(event);
-    } else if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || 
+    } else if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||
                event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL) {
         consumed = ProcessMouseEvent(event);
     } else if (event.type == SDL_TEXTINPUT) {
         // Handle text input
         GUIEvent text_event(EventType::TEXT_INPUT, event, Priority::NORMAL);
+        text_event.context = GetActiveContextName();
         consumed = RouteEventToHandlers(text_event);
     }
     
@@ -174,7 +175,8 @@ bool InputManager::ProcessEvent(const SDL_Event& event) {
 bool InputManager::ProcessKeyboardEvent(const SDL_Event& event) {
     EventType type = (event.type == SDL_KEYDOWN) ? EventType::KEYBOARD_PRESS : EventType::KEYBOARD_RELEASE;
     GUIEvent gui_event(type, event, DetermineEventPriority(event));
-    
+    gui_event.context = GetActiveContextName();
+
     return RouteEventToHandlers(gui_event);
 }
 
@@ -201,6 +203,7 @@ bool InputManager::ProcessMouseEvent(const SDL_Event& event) {
     }
     
     GUIEvent gui_event(type, event, DetermineEventPriority(event));
+    gui_event.context = GetActiveContextName();
     return RouteEventToHandlers(gui_event);
 }
 
@@ -390,7 +393,7 @@ void InputManager::RemoveInputContext(const std::string& context_name) {
 
 InputContext* InputManager::GetCurrentContext() const {
     std::lock_guard<std::mutex> lock(context_mutex_);
-    
+
     if (impl_->current_context_name_.empty()) {
         return nullptr;
     }
@@ -399,8 +402,13 @@ InputContext* InputManager::GetCurrentContext() const {
     if (it != impl_->contexts_.end()) {
         return it->second.get();
     }
-    
+
     return nullptr;
+}
+
+std::string InputManager::GetActiveContextName() const {
+    std::lock_guard<std::mutex> lock(context_mutex_);
+    return impl_->current_context_name_;
 }
 
 void InputManager::SetFocusState(FocusState focus, const std::string& reason) {
@@ -461,6 +469,7 @@ bool InputManager::ShouldConsumeEvent(const SDL_Event& event) const {
     }
 
     GUIEvent gui_event(SDLToEventType(event), event, DetermineEventPriority(event));
+    gui_event.context = GetActiveContextName();
 
     // If GUI does not currently have focus and pass-through is enabled, we
     // allow the event to continue to the game systems.
@@ -550,38 +559,54 @@ bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
         return false;
     }
 
-    // For mouse events, check if mouse is in GUI area
-    if (event.type == EventType::MOUSE_MOVE || event.type == EventType::MOUSE_BUTTON_PRESS ||
-        event.type == EventType::MOUSE_BUTTON_RELEASE || event.type == EventType::MOUSE_WHEEL) {
-        int mouse_x = impl_->mouse_x_;
-        int mouse_y = impl_->mouse_y_;
+    switch (event.type) {
+        case EventType::MOUSE_MOVE:
+        case EventType::MOUSE_BUTTON_PRESS:
+        case EventType::MOUSE_BUTTON_RELEASE:
+        case EventType::MOUSE_WHEEL: {
+            int mouse_x = impl_->mouse_x_;
+            int mouse_y = impl_->mouse_y_;
 
-        switch (event.sdl_event.type) {
-            case SDL_MOUSEMOTION:
-                mouse_x = event.sdl_event.motion.x;
-                mouse_y = event.sdl_event.motion.y;
-                break;
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-                mouse_x = event.sdl_event.button.x;
-                mouse_y = event.sdl_event.button.y;
-                break;
-            case SDL_MOUSEWHEEL: {
-                int wheel_x = 0;
-                int wheel_y = 0;
-                SDL_GetMouseState(&wheel_x, &wheel_y);
-                mouse_x = wheel_x;
-                mouse_y = wheel_y;
-                break;
+            switch (event.sdl_event.type) {
+                case SDL_MOUSEMOTION:
+                    mouse_x = event.sdl_event.motion.x;
+                    mouse_y = event.sdl_event.motion.y;
+                    break;
+                case SDL_MOUSEBUTTONDOWN:
+                case SDL_MOUSEBUTTONUP:
+                    mouse_x = event.sdl_event.button.x;
+                    mouse_y = event.sdl_event.button.y;
+                    break;
+                case SDL_MOUSEWHEEL: {
+                    int wheel_x = 0;
+                    int wheel_y = 0;
+                    SDL_GetMouseState(&wheel_x, &wheel_y);
+                    mouse_x = wheel_x;
+                    mouse_y = wheel_y;
+                    break;
+                }
+                default:
+                    break;
             }
-            default:
-                break;
-        }
 
-        return impl_->IsMouseInGUIArea(mouse_x, mouse_y);
+            return impl_->IsMouseInGUIArea(mouse_x, mouse_y);
+        }
+        case EventType::KEYBOARD_PRESS:
+        case EventType::KEYBOARD_RELEASE:
+        case EventType::TEXT_INPUT: {
+            FocusState focus = current_focus_state_.load();
+            if (focus == FocusState::GUI) {
+                return true;
+            }
+            if (!settings_.pass_through_enabled) {
+                return true;
+            }
+            return false;
+        }
+        default:
+            break;
     }
 
-    // For non-mouse events, we have matching handlers
     return true;
 }
 

@@ -306,14 +306,15 @@ private:
     bool RouteEventToHandlers(const GUIEvent& event);
     bool RouteToHandlers(const GUIEvent& event);
     bool HasEnabledHandlersForEvent(const GUIEvent& event) const;
-    
+
     // Focus management
     void NotifyFocusListeners(FocusState previous, FocusState current);
-    
+
     // Helper methods
     EventType SDLToEventType(const SDL_Event& event) const;
     Priority DetermineEventPriority(const SDL_Event& event) const;
     bool IsEventConsumedByGUI(const GUIEvent& event) const;
+    std::string GetActiveContextName() const;
 };
 
 /**

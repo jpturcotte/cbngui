@@ -131,6 +131,55 @@ void RunInputManagerEventRoutingTests() {
 
     manager.Shutdown();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+
+    // Verify shared-focus keyboard pass-through respects handler consumption
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    BN::GUI::InputManager::InputSettings shared_settings;
+    shared_settings.pass_through_enabled = true;
+    shared_settings.prevent_game_input_when_gui_focused = true;
+
+    BN::GUI::InputManager shared_manager(shared_settings);
+    assert(shared_manager.Initialize());
+    shared_manager.SetFocusState(BN::GUI::InputManager::FocusState::SHARED, "shared-tests");
+
+    bool keyboard_handler_invoked = false;
+    shared_manager.RegisterHandler(
+        BN::GUI::InputManager::EventType::KEYBOARD_PRESS,
+        [&](const BN::GUI::GUIEvent& event) {
+            keyboard_handler_invoked = true;
+            return event.sdl_event.key.keysym.sym == SDLK_RETURN;
+        },
+        BN::GUI::InputManager::Priority::NORMAL);
+
+    SDL_Event shared_key{};
+    shared_key.type = SDL_KEYDOWN;
+    shared_key.key.type = SDL_KEYDOWN;
+    shared_key.key.state = SDL_PRESSED;
+    shared_key.key.repeat = 0;
+    shared_key.key.keysym.sym = SDLK_a;
+    shared_key.key.keysym.scancode = SDL_SCANCODE_A;
+    shared_key.key.keysym.mod = KMOD_NONE;
+
+    keyboard_handler_invoked = false;
+    assert(!shared_manager.ShouldConsumeEvent(shared_key));
+    assert(!shared_manager.ProcessEvent(shared_key));
+    assert(keyboard_handler_invoked);
+
+    auto updated_shared_settings = shared_manager.GetSettings();
+    updated_shared_settings.pass_through_enabled = false;
+    shared_manager.UpdateSettings(updated_shared_settings);
+
+    shared_key.key.keysym.sym = SDLK_RETURN;
+    keyboard_handler_invoked = false;
+    assert(shared_manager.ShouldConsumeEvent(shared_key));
+    assert(shared_manager.ProcessEvent(shared_key));
+    assert(keyboard_handler_invoked);
+
+    shared_manager.Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
 struct EventRecorder {
