@@ -75,10 +75,15 @@ public:
     };
 
     /**
-     * @brief Constructor
+     * @brief Default constructor
+     */
+    InputManager();
+
+    /**
+     * @brief Constructor with explicit settings
      * @param settings Initial input settings
      */
-    explicit InputManager(const InputSettings& settings = InputSettings());
+    explicit InputManager(const InputSettings& settings);
 
     /**
      * @brief Destructor
@@ -240,6 +245,29 @@ public:
         std::atomic<uint64_t> handlers_called{0};
         std::atomic<uint32_t> active_handlers{0};
         std::atomic<uint32_t> focus_changes{0};
+
+        Statistics() = default;
+
+        Statistics(const Statistics& other) {
+            events_processed.store(other.events_processed.load());
+            events_consumed.store(other.events_consumed.load());
+            events_passed_through.store(other.events_passed_through.load());
+            handlers_called.store(other.handlers_called.load());
+            active_handlers.store(other.active_handlers.load());
+            focus_changes.store(other.focus_changes.load());
+        }
+
+        Statistics& operator=(const Statistics& other) {
+            if (this != &other) {
+                events_processed.store(other.events_processed.load());
+                events_consumed.store(other.events_consumed.load());
+                events_passed_through.store(other.events_passed_through.load());
+                handlers_called.store(other.handlers_called.load());
+                active_handlers.store(other.active_handlers.load());
+                focus_changes.store(other.focus_changes.load());
+            }
+            return *this;
+        }
     };
 
     /**

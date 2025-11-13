@@ -1,6 +1,7 @@
 #include "input_manager.h"
 #include <algorithm>
 #include <cassert>
+#include <condition_variable>
 #include <unordered_set>
 #include "debug.h"
 
@@ -60,6 +61,8 @@ public:
     bool IsMouseInGUIArea(int x, int y) const;
     void AddEventToQueue(const GUIEvent& event);
 };
+
+InputManager::InputManager() : InputManager(InputSettings{}) {}
 
 InputManager::InputManager(const InputSettings& settings)
     : settings_(settings), impl_(std::make_unique<Impl>(this)) {
@@ -249,7 +252,7 @@ bool InputManager::RouteEventToHandlers(const GUIEvent& event) {
 }
 
 bool InputManager::RouteToHandlers(const GUIEvent& event) {
-    std::vector<HandlerInfo*> handlers_to_call;
+    std::vector<Impl::HandlerInfo*> handlers_to_call;
 
     // Collect handlers in priority order
     {
@@ -265,15 +268,15 @@ bool InputManager::RouteToHandlers(const GUIEvent& event) {
             }
         }
     }
-    
+
     // Sort by priority (higher first)
     std::sort(handlers_to_call.begin(), handlers_to_call.end(),
-              [](const HandlerInfo* a, const HandlerInfo* b) {
+              [](const Impl::HandlerInfo* a, const Impl::HandlerInfo* b) {
                   return a->priority > b->priority;
               });
-    
+
     // Call handlers
-    for (HandlerInfo* handler_info : handlers_to_call) {
+    for (Impl::HandlerInfo* handler_info : handlers_to_call) {
         try {
             {
                 std::lock_guard<std::mutex> lock(impl_->stats_mutex_);
@@ -322,7 +325,7 @@ int InputManager::RegisterHandler(EventType type, EventHandler handler, Priority
 
     int id = next_handler_id_.fetch_add(1);
 
-    HandlerInfo info;
+    Impl::HandlerInfo info;
     info.id = id;
     info.type = type;
     info.handler = handler;
