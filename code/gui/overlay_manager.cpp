@@ -4,6 +4,8 @@
 #include "event_bus_adapter.h"
 #include "mock_events.h"
 #include "InventoryWidget.h"
+#include "ui_adaptor.h"
+#include "ui_manager.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -38,6 +40,8 @@ struct OverlayManager::Impl {
     std::optional<inventory_overlay_state> inventory_state_;
     bool character_widget_visible_ = false;
     std::optional<character_overlay_state> character_state_;
+    std::unique_ptr<cataclysm::gui::UiAdaptor> ui_adaptor;
+    bool registered_with_ui_manager = false;
 
     Impl() = default;
     ~Impl() = default;
@@ -60,6 +64,13 @@ struct OverlayManager::Impl {
             return false;
         }
         return true;
+    }
+
+    void NotifyRedraw() {
+        cataclysm::gui::UiManager::instance().request_redraw();
+        if (redraw_callback) {
+            redraw_callback();
+        }
     }
 };
 
@@ -137,6 +148,14 @@ bool OverlayManager::InitializeInternal(const Config& config) {
     }
 
     pImpl_->UpdateFocusState();
+
+    pImpl_->ui_adaptor = std::make_unique<cataclysm::gui::UiAdaptor>();
+    pImpl_->ui_adaptor->set_redraw_callback([this]() {
+        this->Render();
+    });
+    pImpl_->ui_adaptor->set_screen_resize_callback([this](int width, int height) {
+        this->OnWindowResized(width, height);
+    });
     return true;
 }
 
@@ -146,6 +165,13 @@ void OverlayManager::Shutdown() {
     }
 
     Close();
+
+    if (pImpl_->ui_adaptor && pImpl_->registered_with_ui_manager) {
+        cataclysm::gui::UiManager::instance().unregister_adaptor(*pImpl_->ui_adaptor);
+        pImpl_->registered_with_ui_manager = false;
+    }
+
+    pImpl_->ui_adaptor.reset();
 
     if (pImpl_->event_bus_adapter) {
         pImpl_->event_bus_adapter->shutdown();
@@ -191,14 +217,17 @@ void OverlayManager::UpdateMapTexture(SDL_Texture* texture, int width, int heigh
 
 void OverlayManager::UpdateInventory(const inventory_overlay_state& state) {
     pImpl_->inventory_state_ = state;
+    pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::ShowInventory() {
     pImpl_->inventory_widget_visible_ = true;
+    pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideInventory() {
     pImpl_->inventory_widget_visible_ = false;
+    pImpl_->NotifyRedraw();
 }
 
 bool OverlayManager::IsInventoryVisible() const {
@@ -207,14 +236,17 @@ bool OverlayManager::IsInventoryVisible() const {
 
 void OverlayManager::UpdateCharacter(const character_overlay_state& state) {
     pImpl_->character_state_ = state;
+    pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::ShowCharacter() {
     pImpl_->character_widget_visible_ = true;
+    pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideCharacter() {
     pImpl_->character_widget_visible_ = false;
+    pImpl_->NotifyRedraw();
 }
 
 bool OverlayManager::IsCharacterVisible() const {
@@ -275,14 +307,17 @@ void OverlayManager::Open() {
     pImpl_->is_open = true;
     pImpl_->UpdateFocusState();
 
+    if (pImpl_->ui_adaptor && !pImpl_->registered_with_ui_manager) {
+        cataclysm::gui::UiManager::instance().register_adaptor(*pImpl_->ui_adaptor);
+        pImpl_->registered_with_ui_manager = true;
+    }
+
     if (pImpl_->event_bus_adapter) {
         const bool is_modal = !pImpl_->pass_through_enabled;
         pImpl_->event_bus_adapter->publishOverlayOpen(kOverlayLifecycleId, is_modal);
     }
 
-    if (pImpl_->redraw_callback) {
-        pImpl_->redraw_callback();
-    }
+    pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::Close() {
@@ -297,9 +332,12 @@ void OverlayManager::Close() {
         pImpl_->event_bus_adapter->publishOverlayClose(kOverlayLifecycleId, false);
     }
 
-    if (pImpl_->redraw_callback) {
-        pImpl_->redraw_callback();
+    if (pImpl_->ui_adaptor && pImpl_->registered_with_ui_manager) {
+        cataclysm::gui::UiManager::instance().unregister_adaptor(*pImpl_->ui_adaptor);
+        pImpl_->registered_with_ui_manager = false;
     }
+
+    pImpl_->NotifyRedraw();
 }
 
 bool OverlayManager::IsOpen() const {
@@ -316,6 +354,11 @@ void OverlayManager::SetEnabled(bool enabled) {
 
     if (!enabled && pImpl_->is_open) {
         Close();
+        return;
+    }
+
+    if (enabled) {
+        pImpl_->NotifyRedraw();
     }
 }
 
@@ -338,6 +381,8 @@ void OverlayManager::OnWindowResized(int width, int height) {
     if (pImpl_->resize_callback) {
         pImpl_->resize_callback(width, height);
     }
+
+    pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::RegisterRedrawCallback(RedrawCallback callback) {
@@ -366,4 +411,8 @@ void OverlayManager::LogError(const std::string& error) const {
 
 bool OverlayManager::IsGraphicalBuild() const {
     return pImpl_->is_graphical_build;
+}
+
+bool OverlayManager::IsRegisteredWithUiManager() const {
+    return pImpl_->registered_with_ui_manager;
 }
