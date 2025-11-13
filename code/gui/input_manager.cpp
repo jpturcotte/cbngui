@@ -2,11 +2,26 @@
 #include <algorithm>
 #include <cassert>
 #include <condition_variable>
+#include <cstring>
 #include <unordered_set>
 #include "debug.h"
 
 namespace BN {
 namespace GUI {
+
+namespace {
+
+bool EventsEqual(const SDL_Event& lhs, const SDL_Event& rhs) {
+    return std::memcmp(&lhs, &rhs, sizeof(SDL_Event)) == 0;
+}
+
+bool IsKeyboardLikeEvent(InputManager::EventType type) {
+    using EventType = InputManager::EventType;
+    return type == EventType::KEYBOARD_PRESS || type == EventType::KEYBOARD_RELEASE ||
+           type == EventType::TEXT_INPUT;
+}
+
+} // namespace
 
 // Forward declarations for internal classes
 class InputManager::Impl {
@@ -157,7 +172,11 @@ bool InputManager::ProcessEvent(const SDL_Event& event) {
         // Handle text input
         GUIEvent text_event(EventType::TEXT_INPUT, event, Priority::NORMAL);
         text_event.context = GetActiveContextName();
-        consumed = RouteEventToHandlers(text_event);
+        if (auto cached = TakePendingSharedFocusKeyboardDecision(text_event)) {
+            consumed = *cached;
+        } else {
+            consumed = RouteEventToHandlers(text_event);
+        }
     }
     
     // Update statistics
@@ -176,6 +195,10 @@ bool InputManager::ProcessKeyboardEvent(const SDL_Event& event) {
     EventType type = (event.type == SDL_KEYDOWN) ? EventType::KEYBOARD_PRESS : EventType::KEYBOARD_RELEASE;
     GUIEvent gui_event(type, event, DetermineEventPriority(event));
     gui_event.context = GetActiveContextName();
+
+    if (auto cached = TakePendingSharedFocusKeyboardDecision(gui_event)) {
+        return *cached;
+    }
 
     return RouteEventToHandlers(gui_event);
 }
@@ -604,10 +627,10 @@ bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
             if (focus == FocusState::SHARED) {
                 // Shared focus respects handler choice when pass-through is enabled.
                 // Handlers may decline the event based on its contents (e.g. only
-                // consuming a specific key). Reporting the event as pre-consumed would
-                // prevent the game layer from receiving keys that GUI handlers reject,
-                // breaking pass-through semantics.
-                return false;
+                // consuming a specific key). Preview the handlers to determine if they
+                // will actually consume this event so pass-through semantics remain
+                // accurate.
+                return PreviewSharedFocusKeyboardConsumption(event);
             }
             return false;
         }
@@ -616,6 +639,48 @@ bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
     }
 
     return true;
+}
+
+bool InputManager::ShouldPreviewSharedFocusKeyboardConsumption(const GUIEvent& event) const {
+    if (!settings_.pass_through_enabled) {
+        return false;
+    }
+    if (!IsKeyboardLikeEvent(event.type)) {
+        return false;
+    }
+    return current_focus_state_.load() == FocusState::SHARED;
+}
+
+bool InputManager::PreviewSharedFocusKeyboardConsumption(const GUIEvent& event) const {
+    if (!ShouldPreviewSharedFocusKeyboardConsumption(event)) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(pending_keyboard_mutex_);
+    if (pending_keyboard_decision_ && EventsEqual(pending_keyboard_decision_->event, event.sdl_event)) {
+        return pending_keyboard_decision_->consumed;
+    }
+
+    PendingKeyboardDecision decision{};
+    decision.event = event.sdl_event;
+    decision.consumed = const_cast<InputManager*>(this)->RouteToHandlers(event);
+    pending_keyboard_decision_ = decision;
+    return decision.consumed;
+}
+
+std::optional<bool> InputManager::TakePendingSharedFocusKeyboardDecision(const GUIEvent& event) {
+    if (!IsKeyboardLikeEvent(event.type)) {
+        return std::nullopt;
+    }
+
+    std::lock_guard<std::mutex> lock(pending_keyboard_mutex_);
+    if (pending_keyboard_decision_ && EventsEqual(pending_keyboard_decision_->event, event.sdl_event)) {
+        bool consumed = pending_keyboard_decision_->consumed;
+        pending_keyboard_decision_.reset();
+        return consumed;
+    }
+
+    return std::nullopt;
 }
 
 // Implementation helper methods

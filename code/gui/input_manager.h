@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include <mutex>
+#include <optional>
 #include <atomic>
 #include <SDL.h>
 #include "gui_settings.h"
@@ -299,6 +300,18 @@ private:
     mutable std::mutex context_mutex_;
     mutable std::mutex listeners_mutex_;
     mutable std::mutex statistics_mutex_;
+
+    struct PendingKeyboardDecision {
+        SDL_Event event{};
+        bool consumed = false;
+    };
+
+    bool ShouldPreviewSharedFocusKeyboardConsumption(const GUIEvent& event) const;
+    bool PreviewSharedFocusKeyboardConsumption(const GUIEvent& event) const;
+    std::optional<bool> TakePendingSharedFocusKeyboardDecision(const GUIEvent& event);
+
+    mutable std::mutex pending_keyboard_mutex_;
+    mutable std::optional<PendingKeyboardDecision> pending_keyboard_decision_;
 
     // Internal event routing
     bool ProcessKeyboardEvent(const SDL_Event& event);
