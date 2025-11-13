@@ -71,10 +71,7 @@ struct OverlayRenderer::Impl {
         
         dpi_scale = scale;
         io->FontGlobalScale = dpi_scale;
-        
-        if (renderer && scale > 0.0f) {
-            SDL_RenderSetScale(renderer, scale, scale);
-        }
+        io->DisplayFramebufferScale = ImVec2(scale, scale);
     }
 };
 

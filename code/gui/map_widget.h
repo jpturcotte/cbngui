@@ -33,7 +33,8 @@ private:
     cataclysm::gui::EventBusAdapter &event_bus_adapter_;
     SDL_Texture* map_texture_ = nullptr;
     ImVec2 texture_size_{0,0};
-    ImVec2 tile_dimensions_{0,0};
+    int tiles_w_ = 0;
+    int tiles_h_ = 0;
     bool has_image_rect_ = false;
     ImVec2 last_image_min_{0.0f, 0.0f};
     ImVec2 last_image_max_{0.0f, 0.0f};
