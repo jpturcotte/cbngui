@@ -211,15 +211,15 @@ void RunOverlayManagerUiIntegrationTest() {
 
     auto& ui_manager = cataclysm::gui::UiManager::instance();
     assert(ui_manager.registered_count() == 0);
-    assert(!overlay_manager.IsRegisteredWithUiManager());
+    assert(!overlay_manager.IsOpen());
 
     overlay_manager.Open();
-    assert(overlay_manager.IsRegisteredWithUiManager());
     assert(ui_manager.registered_count() == 1);
+    assert(overlay_manager.IsOpen());
 
     overlay_manager.Close();
-    assert(!overlay_manager.IsRegisteredWithUiManager());
     assert(ui_manager.registered_count() == 0);
+    assert(!overlay_manager.IsOpen());
 
     overlay_manager.Shutdown();
 
