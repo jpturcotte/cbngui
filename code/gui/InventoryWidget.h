@@ -48,7 +48,11 @@ private:
     const EntryBounds* FindEntryAtPosition(const ImVec2& position) const;
     bool DispatchEntryEvent(const EntryBounds& bounds);
     bool HandleMouseButtonEvent(const SDL_MouseButtonEvent& button_event);
+    bool HandleMouseWheelEvent(const SDL_MouseWheelEvent& wheel_event);
     bool HandleKeyEvent(const SDL_KeyboardEvent& key_event);
+
+    float vertical_wheel_remainder_ = 0.0f;
+    float horizontal_wheel_remainder_ = 0.0f;
 };
 
 #endif // INVENTORY_WIDGET_H
