@@ -602,11 +602,12 @@ bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
                 return true;
             }
             if (focus == FocusState::SHARED) {
-                // Shared focus allows the GUI to handle the event first while still
-                // permitting pass-through of unconsumed inputs. When handlers are
-                // registered (checked above), report that the GUI will consume the
-                // event so callers do not forward it to the game layer as well.
-                return true;
+                // Shared focus respects handler choice when pass-through is enabled.
+                // Handlers may decline the event based on its contents (e.g. only
+                // consuming a specific key). Reporting the event as pre-consumed would
+                // prevent the game layer from receiving keys that GUI handlers reject,
+                // breaking pass-through semantics.
+                return false;
             }
             return false;
         }
