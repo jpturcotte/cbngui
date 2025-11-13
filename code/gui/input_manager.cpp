@@ -14,6 +14,7 @@ public:
     
     struct HandlerInfo {
         int id;
+        EventType type;
         EventHandler handler;
         Priority priority;
         std::string context;
@@ -204,53 +205,59 @@ bool InputManager::RouteEventToHandlers(const GUIEvent& event) {
     if (event.consumed) {
         return true; // Already consumed
     }
-    
+
+    if (!HasEnabledHandlersForEvent(event)) {
+        return false;
+    }
+
     FocusState current_focus = current_focus_state_.load();
-    
-    // Check if event should be consumed based on focus state
-    if (current_focus == FocusState::GUI && !settings_.prevent_game_input_when_gui_focused) {
-        // GUI has focus but allows game input
-        if (!IsEventConsumedByGUI(event)) {
-            return false; // Not consumed, pass to game
+
+    switch (current_focus) {
+        case FocusState::GUI: {
+            if (!settings_.prevent_game_input_when_gui_focused && !IsEventConsumedByGUI(event)) {
+                return false; // GUI allows game input and no matching handler wants the event
+            }
+            return RouteToHandlers(event);
         }
-    } else if (current_focus == FocusState::GAME) {
-        // Game has focus, pass through unless event is in GUI area
-        if (event.type == EventType::MOUSE_MOVE || event.type == EventType::MOUSE_BUTTON_PRESS || 
-            event.type == EventType::MOUSE_BUTTON_RELEASE) {
-            if (impl_->IsMouseInGUIArea(impl_->mouse_x_, impl_->mouse_y_)) {
-                // Mouse is in GUI area, check if GUI should consume
-                if (IsEventConsumedByGUI(event)) {
+        case FocusState::GAME: {
+            // Game has focus, pass through unless event is in GUI area and should be handled
+            if (event.type == EventType::MOUSE_MOVE || event.type == EventType::MOUSE_BUTTON_PRESS ||
+                event.type == EventType::MOUSE_BUTTON_RELEASE || event.type == EventType::MOUSE_WHEEL) {
+                if (impl_->IsMouseInGUIArea(impl_->mouse_x_, impl_->mouse_y_) && IsEventConsumedByGUI(event)) {
                     return RouteToHandlers(event);
                 }
+            } else if (!settings_.pass_through_enabled && IsEventConsumedByGUI(event)) {
+                // Pass-through disabled allows GUI handlers to run even when game has focus
+                return RouteToHandlers(event);
             }
+            return false; // Pass to game
         }
-        return false; // Pass to game
-    } else if (current_focus == FocusState::GUI) {
-        // GUI has exclusive focus
-        return RouteToHandlers(event);
-    } else if (current_focus == FocusState::SHARED) {
-        // Shared focus, route to both but GUI first
-        bool consumed = RouteToHandlers(event);
-        if (!consumed && settings_.pass_through_enabled) {
-            // Pass unconsumed events to game
-            return false;
+        case FocusState::SHARED: {
+            bool consumed = RouteToHandlers(event);
+            if (!consumed && settings_.pass_through_enabled) {
+                // Pass unconsumed events to game
+                return false;
+            }
+            return consumed;
         }
-        return consumed;
+        case FocusState::NONE:
+        default:
+            break;
     }
-    
+
     return false;
 }
 
 bool InputManager::RouteToHandlers(const GUIEvent& event) {
     std::vector<HandlerInfo*> handlers_to_call;
-    
+
     // Collect handlers in priority order
     {
         std::lock_guard<std::mutex> lock(handlers_mutex_);
         for (auto& [id, handler_info] : impl_->handlers_) {
-            if (handler_info.enabled && handler_info.priority >= event.priority) {
+            if (handler_info.enabled && handler_info.type == event.type && handler_info.priority >= event.priority) {
                 // Check context filter
-                if (!event.context.empty() && !handler_info.context.empty() && 
+                if (!event.context.empty() && !handler_info.context.empty() &&
                     event.context != handler_info.context) {
                     continue;
                 }
@@ -284,25 +291,59 @@ bool InputManager::RouteToHandlers(const GUIEvent& event) {
     return false; // Not consumed
 }
 
+bool InputManager::HasEnabledHandlersForEvent(const GUIEvent& event) const {
+    std::lock_guard<std::mutex> lock(handlers_mutex_);
+
+    for (const auto& [id, handler_info] : impl_->handlers_) {
+        if (!handler_info.enabled) {
+            continue;
+        }
+
+        if (handler_info.type != event.type) {
+            continue;
+        }
+
+        if (handler_info.priority < event.priority) {
+            continue;
+        }
+
+        if (!event.context.empty() && !handler_info.context.empty() && event.context != handler_info.context) {
+            continue;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 int InputManager::RegisterHandler(EventType type, EventHandler handler, Priority priority, const std::string& context) {
     std::lock_guard<std::mutex> lock(handlers_mutex_);
-    
+
     int id = next_handler_id_.fetch_add(1);
-    
+
     HandlerInfo info;
     info.id = id;
+    info.type = type;
     info.handler = handler;
     info.priority = priority;
     info.context = context;
     info.enabled = true;
-    
+
     impl_->handlers_[id] = std::move(info);
     
     {
         std::lock_guard<std::mutex> stats_lock(impl_->stats_mutex_);
-        impl_->stats_.active_handlers = impl_->handlers_.size();
+        auto enabled_count = std::count_if(
+            impl_->handlers_.begin(),
+            impl_->handlers_.end(),
+            [](const auto& entry) {
+                return entry.second.enabled;
+            }
+        );
+        impl_->stats_.active_handlers = static_cast<uint32_t>(enabled_count);
     }
-    
+
     debuglog(DebugLevel::Info, "InputManager: Registered handler ", id, " for type ", static_cast<int>(type));
     return id;
 }
@@ -313,7 +354,14 @@ void InputManager::UnregisterHandler(int handler_id) {
     if (impl_->handlers_.erase(handler_id) > 0) {
         {
             std::lock_guard<std::mutex> stats_lock(impl_->stats_mutex_);
-            impl_->stats_.active_handlers = impl_->handlers_.size();
+            auto enabled_count = std::count_if(
+                impl_->handlers_.begin(),
+                impl_->handlers_.end(),
+                [](const auto& entry) {
+                    return entry.second.enabled;
+                }
+            );
+            impl_->stats_.active_handlers = static_cast<uint32_t>(enabled_count);
         }
         debuglog(DebugLevel::Info, "InputManager: Unregistered handler ", handler_id);
     }
@@ -495,6 +543,10 @@ InputManager::Priority InputManager::DetermineEventPriority(const SDL_Event& eve
 }
 
 bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
+    if (!HasEnabledHandlersForEvent(event)) {
+        return false;
+    }
+
     // For mouse events, check if mouse is in GUI area
     if (event.type == EventType::MOUSE_MOVE || event.type == EventType::MOUSE_BUTTON_PRESS ||
         event.type == EventType::MOUSE_BUTTON_RELEASE || event.type == EventType::MOUSE_WHEEL) {
@@ -525,12 +577,9 @@ bool InputManager::IsEventConsumedByGUI(const GUIEvent& event) const {
 
         return impl_->IsMouseInGUIArea(mouse_x, mouse_y);
     }
-    
-    // For keyboard events, check if any handlers are registered
-    {
-        std::lock_guard<std::mutex> lock(handlers_mutex_);
-        return !impl_->handlers_.empty();
-    }
+
+    // For non-mouse events, we have matching handlers
+    return true;
 }
 
 // Implementation helper methods
