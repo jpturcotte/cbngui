@@ -13,6 +13,30 @@
 namespace {
 constexpr ImVec2 kTopGridSize(240.0f, 180.0f);
 
+int AdjustActiveRowIndex(const character_overlay_tab& tab, int active_row_index) {
+    if (active_row_index < 0) {
+        return active_row_index;
+    }
+
+    if (tab.id == "bionics") {
+        const int adjusted_index = active_row_index + 1;
+        if (adjusted_index >= static_cast<int>(tab.rows.size())) {
+            return -1;
+        }
+        return adjusted_index;
+    }
+
+    return active_row_index;
+}
+
+int AdjustRowEventIndex(const character_overlay_tab& tab, int row_index) {
+    if (tab.id == "bionics") {
+        return row_index - 1;
+    }
+
+    return row_index;
+}
+
 bool IsCharacterWindowFocused() {
     return ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows |
                                   ImGuiFocusedFlags_NoPopupHierarchy);
@@ -125,7 +149,8 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
         }
     }
 
-    auto draw_grid = [&](const character_overlay_tab& tab, int active_row_index) {
+    auto draw_grid = [&](const character_overlay_tab& tab, int raw_active_row_index) {
+        const int active_row_index = AdjustActiveRowIndex(tab, raw_active_row_index);
         ImGui::PushID(tab.id.c_str());
         if (ImGui::BeginTable("TopGrid", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, kTopGridSize)) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 130.0f);
@@ -226,6 +251,8 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                     event_bus_adapter_.publish(cataclysm::gui::CharacterTabRequestedEvent(tab.id));
                 }
                 if (tab_open) {
+                    const int active_row_index =
+                        is_active_tab ? AdjustActiveRowIndex(tab, state.active_row_index) : -1;
                     if (ImGui::BeginTable("CharacterTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 200.0f);
                         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
@@ -234,7 +261,7 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                             const auto& row = tab.rows[j];
                             ImGui::TableNextRow();
                             ImGui::TableSetColumnIndex(0);
-                            bool is_selected = row.highlighted || (is_active_tab && (static_cast<int>(j) == state.active_row_index));
+                            bool is_selected = row.highlighted || (static_cast<int>(j) == active_row_index);
                             const bool row_pressed = ImGui::Selectable(row.name.c_str(), is_selected,
                                                                          ImGuiSelectableFlags_SpanAllColumns);
                             RecordRect(row_rects_, tab.id + ":" + std::to_string(j));
@@ -248,7 +275,11 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                                 row_mouse_pos.x >= row_rect.min.x && row_mouse_pos.x <= row_rect.max.x &&
                                 row_mouse_pos.y >= row_rect.min.y && row_mouse_pos.y <= row_rect.max.y;
                             if (row_clicked || row_activated || row_bounds_clicked) {
-                                event_bus_adapter_.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, j));
+                                const int event_row_index = AdjustRowEventIndex(tab, static_cast<int>(j));
+                                if (event_row_index >= 0) {
+                                    event_bus_adapter_.publish(
+                                        cataclysm::gui::CharacterRowActivatedEvent(tab.id, event_row_index));
+                                }
                             }
                             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
                                 ImGui::SetTooltip("%s", row.tooltip.c_str());
