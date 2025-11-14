@@ -125,7 +125,7 @@ struct OverlayManager::Impl {
             inventory_click_handler = [](const inventory_entry&) {};
         }
 
-        if (is_open) {
+        if (is_open && inventory_widget_visible_) {
             StartInventoryForwarding();
         }
     }
@@ -137,8 +137,44 @@ struct OverlayManager::Impl {
             inventory_key_handler = [](const SDL_KeyboardEvent&) {};
         }
 
-        if (is_open) {
+        if (is_open && inventory_widget_visible_) {
             StartInventoryForwarding();
+        }
+    }
+
+    void SetCharacterTabHandler(std::function<void(const std::string&)> handler) {
+        if (handler) {
+            character_tab_handler = std::move(handler);
+        } else {
+            character_tab_handler = [](const std::string&) {};
+        }
+
+        if (is_open && character_widget_visible_) {
+            StartCharacterForwarding();
+        }
+    }
+
+    void SetCharacterRowHandler(std::function<void(const std::string&, int)> handler) {
+        if (handler) {
+            character_row_handler = std::move(handler);
+        } else {
+            character_row_handler = [](const std::string&, int) {};
+        }
+
+        if (is_open && character_widget_visible_) {
+            StartCharacterForwarding();
+        }
+    }
+
+    void SetCharacterCommandHandler(std::function<void(cataclysm::gui::CharacterCommand)> handler) {
+        if (handler) {
+            character_command_handler = std::move(handler);
+        } else {
+            character_command_handler = [](cataclysm::gui::CharacterCommand) {};
+        }
+
+        if (is_open && character_widget_visible_) {
+            StartCharacterForwarding();
         }
     }
 };
@@ -296,11 +332,15 @@ void OverlayManager::UpdateInventory(const inventory_overlay_state& state) {
 
 void OverlayManager::ShowInventory() {
     pImpl_->inventory_widget_visible_ = true;
+    if (pImpl_->is_open) {
+        pImpl_->StartInventoryForwarding();
+    }
     pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideInventory() {
     pImpl_->inventory_widget_visible_ = false;
+    pImpl_->StopInventoryForwarding();
     pImpl_->NotifyRedraw();
 }
 
@@ -315,11 +355,15 @@ void OverlayManager::UpdateCharacter(const character_overlay_state& state) {
 
 void OverlayManager::ShowCharacter() {
     pImpl_->character_widget_visible_ = true;
+    if (pImpl_->is_open) {
+        pImpl_->StartCharacterForwarding();
+    }
     pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideCharacter() {
     pImpl_->character_widget_visible_ = false;
+    pImpl_->StopCharacterForwarding();
     pImpl_->NotifyRedraw();
 }
 
@@ -369,6 +413,31 @@ void OverlayManager::SetInventoryKeyHandler(std::function<void(const SDL_Keyboar
     }
 
     pImpl_->SetInventoryKeyHandler(std::move(handler));
+}
+
+void OverlayManager::SetCharacterTabHandler(std::function<void(const std::string&)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetCharacterTabHandler(std::move(handler));
+}
+
+void OverlayManager::SetCharacterRowHandler(std::function<void(const std::string&, int)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetCharacterRowHandler(std::move(handler));
+}
+
+void OverlayManager::SetCharacterCommandHandler(
+    std::function<void(cataclysm::gui::CharacterCommand)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetCharacterCommandHandler(std::move(handler));
 }
 
 bool OverlayManager::HandleEvent(const SDL_Event& event) {
@@ -434,8 +503,12 @@ void OverlayManager::Open() {
     pImpl_->is_open = true;
     pImpl_->UpdateFocusState();
 
-    pImpl_->StartInventoryForwarding();
-    pImpl_->StartCharacterForwarding();
+    if (pImpl_->inventory_widget_visible_) {
+        pImpl_->StartInventoryForwarding();
+    }
+    if (pImpl_->character_widget_visible_) {
+        pImpl_->StartCharacterForwarding();
+    }
 
     if (pImpl_->ui_adaptor && !pImpl_->registered_with_ui_manager) {
         cataclysm::gui::UiManager::instance().register_adaptor(*pImpl_->ui_adaptor);

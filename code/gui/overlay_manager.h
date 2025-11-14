@@ -8,6 +8,12 @@
 
 struct inventory_entry;
 
+namespace cataclysm {
+namespace gui {
+enum class CharacterCommand;
+} // namespace gui
+} // namespace cataclysm
+
 class OverlayManager {
 public:
     struct Impl;
@@ -47,6 +53,9 @@ public:
 
     void SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler);
     void SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler);
+    void SetCharacterTabHandler(std::function<void(const std::string&)> handler);
+    void SetCharacterRowHandler(std::function<void(const std::string&, int)> handler);
+    void SetCharacterCommandHandler(std::function<void(cataclysm::gui::CharacterCommand)> handler);
 
     bool HandleEvent(const SDL_Event& event);
 

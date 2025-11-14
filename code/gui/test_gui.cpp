@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <string>
@@ -311,6 +312,35 @@ private:
     MockInventorySelector &selector_;
 };
 
+struct MockCharacterDisplay {
+    std::vector<std::string> tab_order;
+    int active_tab_index = -1;
+    int active_row_index = -1;
+    cataclysm::gui::CharacterCommand last_command = cataclysm::gui::CharacterCommand::HELP;
+    int command_count = 0;
+
+    void set_tabs(std::vector<std::string> tabs) {
+        tab_order = std::move(tabs);
+    }
+
+    void request_tab(const std::string &tab_id) {
+        const auto it = std::find(tab_order.begin(), tab_order.end(), tab_id);
+        if (it != tab_order.end()) {
+            active_tab_index = static_cast<int>(std::distance(tab_order.begin(), it));
+        }
+    }
+
+    void activate_row(const std::string &tab_id, int row_index) {
+        request_tab(tab_id);
+        active_row_index = row_index;
+    }
+
+    void handle_command(cataclysm::gui::CharacterCommand command) {
+        last_command = command;
+        ++command_count;
+    }
+};
+
 SDL_KeyboardEvent MakeKeyEvent(SDL_Keycode key, SDL_Scancode scancode) {
     SDL_KeyboardEvent event{};
     event.type = SDL_KEYDOWN;
@@ -433,6 +463,119 @@ void RunOverlayInventoryInteractionBridgeTest() {
     assert(actual_selector.activated_entries == expected_selector.activated_entries);
 
     overlay_manager.HideInventory();
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+void RunOverlayCharacterInteractionBridgeTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window *window = SDL_CreateWindow(
+        "overlay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = false;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    MockCharacterDisplay expected_display;
+    expected_display.set_tabs({ "stats", "skills", "traits", "effects" });
+    MockCharacterDisplay actual_display = expected_display;
+
+    overlay_manager.SetCharacterTabHandler([
+        &actual_display
+    ](const std::string &tab_id) {
+        actual_display.request_tab(tab_id);
+    });
+
+    overlay_manager.SetCharacterRowHandler([
+        &actual_display
+    ](const std::string &tab_id, int row_index) {
+        actual_display.activate_row(tab_id, row_index);
+    });
+
+    overlay_manager.SetCharacterCommandHandler([
+        &actual_display
+    ](cataclysm::gui::CharacterCommand command) {
+        actual_display.handle_command(command);
+    });
+
+    auto &event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+
+    cataclysm::gui::CharacterTabRequestedEvent pre_open_tab("skills");
+    event_bus.publish(pre_open_tab);
+    assert(actual_display.active_tab_index == -1);
+
+    overlay_manager.Open();
+    overlay_manager.ShowCharacter();
+    overlay_manager.SetFocused(true);
+
+    expected_display.request_tab("skills");
+    cataclysm::gui::CharacterTabRequestedEvent tab_event("skills");
+    event_bus.publish(tab_event);
+    assert(actual_display.active_tab_index == expected_display.active_tab_index);
+
+    expected_display.activate_row("traits", 2);
+    cataclysm::gui::CharacterRowActivatedEvent row_event("traits", 2);
+    event_bus.publish(row_event);
+    assert(actual_display.active_tab_index == expected_display.active_tab_index);
+    assert(actual_display.active_row_index == expected_display.active_row_index);
+
+    expected_display.handle_command(cataclysm::gui::CharacterCommand::RENAME);
+    cataclysm::gui::CharacterCommandEvent rename_event(cataclysm::gui::CharacterCommand::RENAME);
+    event_bus.publish(rename_event);
+    assert(actual_display.command_count == expected_display.command_count);
+    assert(actual_display.last_command == expected_display.last_command);
+
+    overlay_manager.HideCharacter();
+    const int hidden_tab_index = actual_display.active_tab_index;
+    const int hidden_row_index = actual_display.active_row_index;
+    cataclysm::gui::CharacterTabRequestedEvent hidden_tab("stats");
+    event_bus.publish(hidden_tab);
+    assert(actual_display.active_tab_index == hidden_tab_index);
+    assert(actual_display.active_row_index == hidden_row_index);
+
+    overlay_manager.ShowCharacter();
+    expected_display.request_tab("stats");
+    event_bus.publish(hidden_tab);
+    assert(actual_display.active_tab_index == expected_display.active_tab_index);
+
+    expected_display.activate_row("effects", 1);
+    cataclysm::gui::CharacterRowActivatedEvent effects_row("effects", 1);
+    event_bus.publish(effects_row);
+    assert(actual_display.active_tab_index == expected_display.active_tab_index);
+    assert(actual_display.active_row_index == expected_display.active_row_index);
+
+    overlay_manager.Close();
+    const int closed_tab_index = actual_display.active_tab_index;
+    const int closed_row_index = actual_display.active_row_index;
+    cataclysm::gui::CharacterCommandEvent closed_command(cataclysm::gui::CharacterCommand::CONFIRM);
+    event_bus.publish(closed_command);
+    assert(actual_display.command_count == expected_display.command_count);
+    assert(actual_display.last_command == expected_display.last_command);
+    cataclysm::gui::CharacterTabRequestedEvent closed_tab("skills");
+    event_bus.publish(closed_tab);
+    assert(actual_display.active_tab_index == closed_tab_index);
+    assert(actual_display.active_row_index == closed_row_index);
+
+    overlay_manager.HideCharacter();
     overlay_manager.Shutdown();
 
     SDL_DestroyRenderer(renderer);
@@ -800,6 +943,7 @@ int main() {
     RunInputManagerEventRoutingTests();
     RunOverlayManagerUiIntegrationTest();
     RunOverlayInventoryInteractionBridgeTest();
+    RunOverlayCharacterInteractionBridgeTest();
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
