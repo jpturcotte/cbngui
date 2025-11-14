@@ -204,7 +204,7 @@ void RunOverlayManagerUiIntegrationTest() {
     OverlayManager overlay_manager;
     OverlayManager::Config config;
     config.enabled = true;
-    config.pass_through_input = true;
+    config.pass_through_input = false;
     config.dpi_scale = 1.0f;
 
     assert(overlay_manager.Initialize(window, renderer, config));
@@ -216,6 +216,14 @@ void RunOverlayManagerUiIntegrationTest() {
     overlay_manager.Open();
     assert(ui_manager.registered_count() == 1);
     assert(overlay_manager.IsOpen());
+
+    overlay_manager.SetFocused(true);
+
+    SDL_Event passthrough_event{};
+    passthrough_event.type = SDL_USEREVENT;
+    passthrough_event.user.type = SDL_USEREVENT;
+
+    assert(!overlay_manager.HandleEvent(passthrough_event));
 
     overlay_manager.Close();
     assert(ui_manager.registered_count() == 0);
