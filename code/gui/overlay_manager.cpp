@@ -6,6 +6,7 @@
 #include "InventoryWidget.h"
 #include "ui_adaptor.h"
 #include "ui_manager.h"
+#include "imgui.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -258,6 +259,28 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
         return false;
     }
 
+    const auto IsMouseEvent = [](const SDL_Event& e) {
+        switch (e.type) {
+            case SDL_MOUSEMOTION:
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            case SDL_MOUSEWHEEL:
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    const auto IsKeyboardEvent = [](const SDL_Event& e) {
+        switch (e.type) {
+            case SDL_KEYDOWN:
+            case SDL_KEYUP:
+                return true;
+            default:
+                return false;
+        }
+    };
+
     switch (event.type) {
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
@@ -293,7 +316,21 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
         }
 
         const bool consumed = renderer_consumed || widget_consumed;
-        return consumed || !pImpl_->pass_through_enabled;
+        if (consumed) {
+            return true;
+        }
+
+        if (!pImpl_->pass_through_enabled) {
+            if (ImGuiIO* io = pImpl_->overlay_renderer->GetIO()) {
+                const bool wants_mouse = io->WantCaptureMouse && IsMouseEvent(event);
+                const bool wants_keyboard = io->WantCaptureKeyboard && IsKeyboardEvent(event);
+                const bool wants_text = io->WantTextInput && event.type == SDL_TEXTINPUT;
+
+                if (wants_mouse || wants_keyboard || wants_text) {
+                    return true;
+                }
+            }
+        }
     }
 
     return false;
