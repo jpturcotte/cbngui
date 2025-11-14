@@ -38,6 +38,11 @@ public:
     void HideCharacter();
     bool IsCharacterVisible() const;
 
+    void StartInventoryForwarding();
+    void StopInventoryForwarding();
+    void StartCharacterForwarding();
+    void StopCharacterForwarding();
+
     bool HandleEvent(const SDL_Event& event);
 
     void Open();
