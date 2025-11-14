@@ -1,6 +1,7 @@
 #include "CharacterWidget.h"
 
 #include <algorithm>
+#include <array>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -110,6 +111,20 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
     ImGui::Separator();
 
     // Top Grids (Stats, Encumbrance, Speed)
+    const std::array<std::string_view, 3> kTopTabIds = {"stats", "encumbrance", "speed"};
+    std::array<int, 3> top_tab_indices;
+    top_tab_indices.fill(-1);
+
+    for (size_t top_index = 0; top_index < kTopTabIds.size(); ++top_index) {
+        const auto it = std::find_if(state.tabs.begin(), state.tabs.end(),
+                                     [&](const character_overlay_tab& tab) {
+                                         return tab.id == kTopTabIds[top_index];
+                                     });
+        if (it != state.tabs.end()) {
+            top_tab_indices[top_index] = static_cast<int>(std::distance(state.tabs.begin(), it));
+        }
+    }
+
     auto draw_grid = [&](const character_overlay_tab& tab, int active_row_index) {
         ImGui::PushID(tab.id.c_str());
         if (ImGui::BeginTable("TopGrid", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, kTopGridSize)) {
@@ -137,19 +152,26 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
         ImGui::PopID();
     };
 
+    auto is_top_tab_index = [&](int index) {
+        return std::find(top_tab_indices.begin(), top_tab_indices.end(), index) != top_tab_indices.end();
+    };
+
+    auto draw_top_grid_if_present = [&](int tab_index) {
+        if (tab_index < 0 || tab_index >= static_cast<int>(state.tabs.size())) {
+            return;
+        }
+        const auto& tab = state.tabs[tab_index];
+        const int active_row_index = state.active_tab_index == tab_index ? state.active_row_index : -1;
+        draw_grid(tab, active_row_index);
+    };
+
     if (ImGui::BeginTable("TopGrids", 3, ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableNextColumn();
-        if (state.tabs.size() > 0) {
-            draw_grid(state.tabs[0], state.active_tab_index == 0 ? state.active_row_index : -1);
-        }
+        draw_top_grid_if_present(top_tab_indices[0]);
         ImGui::TableNextColumn();
-        if (state.tabs.size() > 1) {
-            draw_grid(state.tabs[1], state.active_tab_index == 1 ? state.active_row_index : -1);
-        }
+        draw_top_grid_if_present(top_tab_indices[1]);
         ImGui::TableNextColumn();
-        if (state.tabs.size() > 2) {
-            draw_grid(state.tabs[2], state.active_tab_index == 2 ? state.active_row_index : -1);
-        }
+        draw_top_grid_if_present(top_tab_indices[2]);
         ImGui::EndTable();
     }
 
@@ -163,7 +185,10 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
         ImGui::TableNextColumn();
         // Tabbed Panel
         if (ImGui::BeginTabBar("CharacterTabs", ImGuiTabBarFlags_None)) {
-            for (size_t i = 3; i < state.tabs.size(); ++i) {
+            for (size_t i = 0; i < state.tabs.size(); ++i) {
+                if (is_top_tab_index(static_cast<int>(i))) {
+                    continue;
+                }
                 const auto& tab = state.tabs[i];
                 bool is_active_tab = static_cast<int>(i) == state.active_tab_index;
                 ImGui::PushID(tab.id.c_str());
