@@ -12,6 +12,7 @@
 #include <iostream>
 #include <functional>
 #include <optional>
+#include <utility>
 
 #include "InventoryOverlayState.h"
 #include "CharacterOverlayState.h"
@@ -116,6 +117,30 @@ struct OverlayManager::Impl {
         interaction_bridge->set_character_row_handler(nullptr);
         interaction_bridge->set_character_command_handler(nullptr);
     }
+
+    void SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler) {
+        if (handler) {
+            inventory_click_handler = std::move(handler);
+        } else {
+            inventory_click_handler = [](const inventory_entry&) {};
+        }
+
+        if (is_open) {
+            StartInventoryForwarding();
+        }
+    }
+
+    void SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler) {
+        if (handler) {
+            inventory_key_handler = std::move(handler);
+        } else {
+            inventory_key_handler = [](const SDL_KeyboardEvent&) {};
+        }
+
+        if (is_open) {
+            StartInventoryForwarding();
+        }
+    }
 };
 
 OverlayManager::OverlayManager() : pImpl_(std::make_unique<Impl>()) {}
@@ -183,8 +208,6 @@ bool OverlayManager::InitializeInternal(const Config& config) {
     pImpl_->overlay_ui = std::make_unique<OverlayUI>(*pImpl_->event_bus_adapter);
     pImpl_->event_bus_adapter->initialize();
     pImpl_->interaction_bridge = std::make_unique<cataclysm::gui::OverlayInteractionBridge>(*pImpl_->event_bus_adapter);
-    pImpl_->StartInventoryForwarding();
-    pImpl_->StartCharacterForwarding();
 
     pImpl_->event_bus_adapter->subscribe<cataclysm::gui::UIButtonClickedEvent>([](const cataclysm::gui::UIButtonClickedEvent& event) {
         std::cout << "Button clicked event received: " << event.button_id << std::endl;
@@ -332,6 +355,22 @@ void OverlayManager::StopCharacterForwarding() {
     pImpl_->StopCharacterForwarding();
 }
 
+void OverlayManager::SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetInventoryClickHandler(std::move(handler));
+}
+
+void OverlayManager::SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetInventoryKeyHandler(std::move(handler));
+}
+
 bool OverlayManager::HandleEvent(const SDL_Event& event) {
     if (!pImpl_->is_initialized || !pImpl_->config.enabled) {
         return false;
@@ -395,6 +434,9 @@ void OverlayManager::Open() {
     pImpl_->is_open = true;
     pImpl_->UpdateFocusState();
 
+    pImpl_->StartInventoryForwarding();
+    pImpl_->StartCharacterForwarding();
+
     if (pImpl_->ui_adaptor && !pImpl_->registered_with_ui_manager) {
         cataclysm::gui::UiManager::instance().register_adaptor(*pImpl_->ui_adaptor);
         pImpl_->registered_with_ui_manager = true;
@@ -415,6 +457,9 @@ void OverlayManager::Close() {
 
     pImpl_->is_open = false;
     pImpl_->UpdateFocusState();
+
+    pImpl_->StopInventoryForwarding();
+    pImpl_->StopCharacterForwarding();
 
     if (pImpl_->event_bus_adapter) {
         pImpl_->event_bus_adapter->publishOverlayClose(kOverlayLifecycleId, false);
