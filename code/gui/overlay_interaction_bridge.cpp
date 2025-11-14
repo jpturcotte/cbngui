@@ -37,7 +37,9 @@ OverlayInteractionBridge::OverlayInteractionBridge(EventBusAdapter& event_bus_ad
     register_subscriptions();
 }
 
-OverlayInteractionBridge::~OverlayInteractionBridge() = default;
+OverlayInteractionBridge::~OverlayInteractionBridge() {
+    unregister_subscriptions();
+}
 
 void OverlayInteractionBridge::register_subscriptions() {
     inventory_click_subscription_ = event_bus_adapter_.subscribe<InventoryItemClickedEvent>(
@@ -64,6 +66,21 @@ void OverlayInteractionBridge::register_subscriptions() {
         [this](const CharacterCommandEvent& event) {
             character_command_handler_(event.getCommand());
         });
+}
+
+void OverlayInteractionBridge::unregister_subscriptions() {
+    unsubscribe_and_reset(inventory_click_subscription_);
+    unsubscribe_and_reset(inventory_key_subscription_);
+    unsubscribe_and_reset(character_tab_subscription_);
+    unsubscribe_and_reset(character_row_subscription_);
+    unsubscribe_and_reset(character_command_subscription_);
+}
+
+void OverlayInteractionBridge::unsubscribe_and_reset(std::shared_ptr<EventSubscription>& subscription) {
+    if (subscription) {
+        subscription->unsubscribe();
+        subscription.reset();
+    }
 }
 
 void OverlayInteractionBridge::set_inventory_click_handler(std::function<void(const inventory_entry&)> handler) {

@@ -47,6 +47,9 @@ private:
     std::function<void(CharacterCommand)> character_command_handler_;
 
     void register_subscriptions();
+    void unregister_subscriptions();
+
+    void unsubscribe_and_reset(std::shared_ptr<EventSubscription>& subscription);
 
     template<typename Handler, typename DefaultHandler>
     void assign_or_default(Handler& target, Handler&& incoming, DefaultHandler&& default_handler) {
