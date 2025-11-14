@@ -201,11 +201,16 @@ void RunOverlayManagerUiIntegrationTest() {
     }
     assert(renderer != nullptr);
 
+    BN::GUI::InputManager::InputSettings input_settings;
+    BN::GUI::InputManager input_manager(input_settings);
+    assert(input_manager.Initialize());
+
     OverlayManager overlay_manager;
     OverlayManager::Config config;
     config.enabled = true;
     config.pass_through_input = false;
     config.dpi_scale = 1.0f;
+    config.input_manager = &input_manager;
 
     assert(overlay_manager.Initialize(window, renderer, config));
 
@@ -223,13 +228,15 @@ void RunOverlayManagerUiIntegrationTest() {
     modal_event.type = SDL_USEREVENT;
     modal_event.user.type = SDL_USEREVENT;
 
-    assert(overlay_manager.HandleEvent(modal_event));
+    assert(!overlay_manager.HandleEvent(modal_event));
 
     overlay_manager.Close();
     assert(ui_manager.registered_count() == 0);
     assert(!overlay_manager.IsOpen());
 
     overlay_manager.Shutdown();
+
+    input_manager.Shutdown();
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
@@ -590,11 +597,120 @@ void RunOverlayLifecycleTest(cataclysm::gui::EventBusAdapter &adapter, EventReco
     assert(published_after >= published_before + 5);
 }
 
+void RunOverlayInputAdapterRoutingTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window* window = SDL_CreateWindow(
+        "overlay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    BN::GUI::InputManager::InputSettings settings;
+    settings.pass_through_enabled = true;
+    BN::GUI::InputManager input_manager(settings);
+    assert(input_manager.Initialize());
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = true;
+    config.dpi_scale = 1.0f;
+    config.input_manager = &input_manager;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    overlay_manager.Open();
+    overlay_manager.SetFocused(true);
+    overlay_manager.ShowInventory();
+    overlay_manager.UpdateInventory(BuildMockInventoryState());
+
+    bool gameplay_received = false;
+    const auto gameplay_callback = [&](const BN::GUI::GUIEvent&) {
+        gameplay_received = true;
+        return false;
+    };
+
+    int gameplay_release_handler = input_manager.RegisterHandler(
+        BN::GUI::InputManager::EventType::KEYBOARD_RELEASE,
+        gameplay_callback,
+        BN::GUI::InputManager::Priority::LOW,
+        "gameplay");
+
+    int gameplay_press_handler = input_manager.RegisterHandler(
+        BN::GUI::InputManager::EventType::KEYBOARD_PRESS,
+        gameplay_callback,
+        BN::GUI::InputManager::Priority::LOW,
+        "gameplay");
+
+    SDL_Event keyup{};
+    keyup.type = SDL_KEYUP;
+    keyup.key.type = SDL_KEYUP;
+    keyup.key.timestamp = SDL_GetTicks();
+    keyup.key.keysym.sym = SDLK_z;
+    keyup.key.keysym.scancode = SDL_SCANCODE_Z;
+    keyup.key.repeat = 0;
+
+    gameplay_received = false;
+    bool pass_through_consumed = input_manager.ProcessEvent(keyup);
+    assert(!pass_through_consumed);
+    assert(gameplay_received);
+    assert(input_manager.GetFocusState() == BN::GUI::InputManager::FocusState::SHARED);
+
+    overlay_manager.SetPassThroughInput(false);
+    assert(input_manager.GetFocusState() == BN::GUI::InputManager::FocusState::GUI);
+
+    SDL_Event keydown{};
+    keydown.type = SDL_KEYDOWN;
+    keydown.key.type = SDL_KEYDOWN;
+    keydown.key.timestamp = SDL_GetTicks();
+    keydown.key.keysym.sym = SDLK_a;
+    keydown.key.keysym.scancode = SDL_SCANCODE_A;
+    keydown.key.repeat = 0;
+
+    gameplay_received = false;
+    bool modal_consumed = input_manager.ProcessEvent(keydown);
+    assert(modal_consumed);
+    assert(!gameplay_received);
+
+    overlay_manager.SetPassThroughInput(true);
+    assert(input_manager.GetFocusState() == BN::GUI::InputManager::FocusState::SHARED);
+
+    gameplay_received = false;
+    bool shared_consumed = input_manager.ProcessEvent(keydown);
+    assert(shared_consumed);
+    assert(!gameplay_received);
+
+    overlay_manager.HideInventory();
+    overlay_manager.Close();
+    assert(input_manager.GetFocusState() == BN::GUI::InputManager::FocusState::GAME);
+
+    input_manager.UnregisterHandler(gameplay_release_handler);
+    input_manager.UnregisterHandler(gameplay_press_handler);
+
+    overlay_manager.Shutdown();
+    input_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+
 }  // namespace
 
 int main() {
     RunInputManagerEventRoutingTests();
     RunOverlayManagerUiIntegrationTest();
+    RunOverlayInputAdapterRoutingTest();
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -727,4 +843,3 @@ int main() {
 
     return 0;
 }
-

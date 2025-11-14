@@ -359,6 +359,11 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
     ImGui::End();
 }
 
+bool CharacterWidget::HandleEvent(const SDL_Event& event) {
+    (void)event;
+    return false;
+}
+
 void CharacterWidget::RecordRect(std::vector<InteractiveRect>& container, const std::string& id) {
     ImVec2 min = ImGui::GetItemRectMin();
     ImVec2 max = ImGui::GetItemRectMax();

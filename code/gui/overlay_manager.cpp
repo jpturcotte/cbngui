@@ -1,6 +1,7 @@
 #include "overlay_manager.h"
 #include "overlay_renderer.h"
 #include "overlay_ui.h"
+#include "overlay_input_adapter.h"
 #include "event_bus_adapter.h"
 #include "mock_events.h"
 #include "InventoryWidget.h"
@@ -20,6 +21,7 @@ struct OverlayManager::Impl {
 
     std::unique_ptr<OverlayRenderer> overlay_renderer;
     std::unique_ptr<OverlayUI> overlay_ui;
+    std::unique_ptr<OverlayInputAdapter> input_adapter;
     std::unique_ptr<cataclysm::gui::EventBusAdapter> event_bus_adapter;
 
     Config config;
@@ -34,7 +36,7 @@ struct OverlayManager::Impl {
 
     std::string last_error;
 
-    bool overlay_has_focus = false;
+    BN::GUI::InputManager* input_manager = nullptr;
     bool pass_through_enabled = true;
     bool inventory_widget_visible_ = false;
     std::optional<inventory_overlay_state> inventory_state_;
@@ -51,7 +53,11 @@ struct OverlayManager::Impl {
     }
 
     void UpdateFocusState() {
-        overlay_has_focus = is_open && is_focused && !is_minimized && config.enabled;
+        const bool overlay_active = is_open && config.enabled;
+        if (input_adapter) {
+            input_adapter->SetOverlayActive(overlay_active);
+            input_adapter->SetFocusEligible(is_focused && !is_minimized && config.enabled);
+        }
     }
 
     void LogError(const std::string& error) {
@@ -61,6 +67,9 @@ struct OverlayManager::Impl {
 
     bool ValidateConfig(const Config& cfg) const {
         if (cfg.dpi_scale <= 0.0f || cfg.dpi_scale > 10.0f) {
+            return false;
+        }
+        if (!cfg.input_manager) {
             return false;
         }
         return true;
@@ -104,6 +113,7 @@ bool OverlayManager::Initialize(SDL_Window* window, SDL_Renderer* renderer, cons
     }
 
     pImpl_->config = config;
+    pImpl_->input_manager = config.input_manager;
     pImpl_->pass_through_enabled = config.pass_through_input;
 
     if (!InitializeInternal(config)) {
@@ -135,8 +145,13 @@ bool OverlayManager::InitializeInternal(const Config& config) {
         return false;
     }
 
+    if (!pImpl_->input_manager) {
+        pImpl_->LogError("InputManager is required for overlay input routing");
+        return false;
+    }
+
     pImpl_->event_bus_adapter = std::make_unique<cataclysm::gui::EventBusAdapter>(cataclysm::gui::EventBusManager::getGlobalEventBus());
-    pImpl_->overlay_ui = std::make_unique<OverlayUI>(*pImpl_->event_bus_adapter);
+    pImpl_->overlay_ui = std::make_unique<OverlayUI>(*pImpl_->event_bus_adapter, pImpl_->input_manager);
     pImpl_->event_bus_adapter->initialize();
 
     pImpl_->event_bus_adapter->subscribe<cataclysm::gui::UIButtonClickedEvent>([](const cataclysm::gui::UIButtonClickedEvent& event) {
@@ -147,6 +162,8 @@ bool OverlayManager::InitializeInternal(const Config& config) {
         pImpl_->overlay_renderer->SetIniFilename(config.ini_filename);
     }
 
+    pImpl_->input_adapter = std::make_unique<OverlayInputAdapter>(*pImpl_->overlay_renderer, *pImpl_->overlay_ui, *pImpl_->input_manager, *pImpl_->event_bus_adapter);
+    pImpl_->input_adapter->Initialize(config.pass_through_input);
     pImpl_->UpdateFocusState();
 
     pImpl_->ui_adaptor = std::make_unique<cataclysm::gui::UiAdaptor>();
@@ -172,6 +189,11 @@ void OverlayManager::Shutdown() {
     }
 
     pImpl_->ui_adaptor.reset();
+
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->Shutdown();
+        pImpl_->input_adapter.reset();
+    }
 
     if (pImpl_->event_bus_adapter) {
         pImpl_->event_bus_adapter->shutdown();
@@ -222,11 +244,17 @@ void OverlayManager::UpdateInventory(const inventory_overlay_state& state) {
 
 void OverlayManager::ShowInventory() {
     pImpl_->inventory_widget_visible_ = true;
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->OnInventoryVisibilityChanged(true);
+    }
     pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideInventory() {
     pImpl_->inventory_widget_visible_ = false;
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->OnInventoryVisibilityChanged(false);
+    }
     pImpl_->NotifyRedraw();
 }
 
@@ -241,11 +269,17 @@ void OverlayManager::UpdateCharacter(const character_overlay_state& state) {
 
 void OverlayManager::ShowCharacter() {
     pImpl_->character_widget_visible_ = true;
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->OnCharacterVisibilityChanged(true);
+    }
     pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideCharacter() {
     pImpl_->character_widget_visible_ = false;
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->OnCharacterVisibilityChanged(false);
+    }
     pImpl_->NotifyRedraw();
 }
 
@@ -269,9 +303,15 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
                     break;
                 case SDL_WINDOWEVENT_MINIMIZED:
                     pImpl_->is_minimized = true;
+                    if (pImpl_->input_adapter) {
+                        pImpl_->input_adapter->OnOverlayMinimized(true);
+                    }
                     break;
                 case SDL_WINDOWEVENT_RESTORED:
                     pImpl_->is_minimized = false;
+                    if (pImpl_->input_adapter) {
+                        pImpl_->input_adapter->OnOverlayMinimized(false);
+                    }
                     break;
                 case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
@@ -282,30 +322,11 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
             break;
     }
 
-    if (pImpl_->overlay_has_focus && pImpl_->overlay_renderer) {
-        const bool renderer_consumed = pImpl_->overlay_renderer->HandleEvent(event);
-
-        bool widget_consumed = false;
-        if (pImpl_->overlay_ui) {
-            if (pImpl_->inventory_widget_visible_ && pImpl_->inventory_state_) {
-                widget_consumed = pImpl_->overlay_ui->GetInventoryWidget().HandleEvent(event) || widget_consumed;
-            }
-        }
-
-        const bool overlay_consumed = renderer_consumed || widget_consumed;
-        if (!pImpl_->pass_through_enabled) {
-            // Modal overlays consume all input while focused, even if no widget explicitly handled it.
-            return true;
-        }
-
-        return overlay_consumed;
+    if (pImpl_->input_adapter) {
+        return pImpl_->input_adapter->HandleEvent(event);
     }
 
     return false;
-}
-
-namespace {
-constexpr const char* kOverlayLifecycleId = "overlay_ui";
 }
 
 void OverlayManager::Open() {
@@ -321,9 +342,9 @@ void OverlayManager::Open() {
         pImpl_->registered_with_ui_manager = true;
     }
 
-    if (pImpl_->event_bus_adapter) {
-        const bool is_modal = !pImpl_->pass_through_enabled;
-        pImpl_->event_bus_adapter->publishOverlayOpen(kOverlayLifecycleId, is_modal);
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->OnOverlayOpened();
+        pImpl_->input_adapter->SetPassThroughEnabled(pImpl_->pass_through_enabled);
     }
 
     pImpl_->NotifyRedraw();
@@ -335,11 +356,12 @@ void OverlayManager::Close() {
     }
 
     pImpl_->is_open = false;
-    pImpl_->UpdateFocusState();
 
-    if (pImpl_->event_bus_adapter) {
-        pImpl_->event_bus_adapter->publishOverlayClose(kOverlayLifecycleId, false);
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->OnOverlayClosed(false);
     }
+
+    pImpl_->UpdateFocusState();
 
     if (pImpl_->ui_adaptor && pImpl_->registered_with_ui_manager) {
         cataclysm::gui::UiManager::instance().unregister_adaptor(*pImpl_->ui_adaptor);
@@ -358,16 +380,42 @@ bool OverlayManager::IsEnabled() const {
 }
 
 void OverlayManager::SetEnabled(bool enabled) {
-    pImpl_->config.enabled = enabled;
-    pImpl_->UpdateFocusState();
-
-    if (!enabled && pImpl_->is_open) {
-        Close();
+    if (pImpl_->config.enabled == enabled) {
         return;
     }
 
+    pImpl_->config.enabled = enabled;
+
+    if (!enabled) {
+        if (pImpl_->is_open) {
+            Close();
+        } else {
+            pImpl_->UpdateFocusState();
+        }
+        return;
+    }
+
+    pImpl_->UpdateFocusState();
+
     if (enabled) {
         pImpl_->NotifyRedraw();
+    }
+}
+
+bool OverlayManager::IsPassThroughInputEnabled() const {
+    return pImpl_->pass_through_enabled;
+}
+
+void OverlayManager::SetPassThroughInput(bool enabled) {
+    if (pImpl_->pass_through_enabled == enabled) {
+        return;
+    }
+
+    pImpl_->pass_through_enabled = enabled;
+    pImpl_->config.pass_through_input = enabled;
+
+    if (pImpl_->input_adapter) {
+        pImpl_->input_adapter->SetPassThroughEnabled(enabled);
     }
 }
 
@@ -409,6 +457,10 @@ const std::string& OverlayManager::GetLastError() const {
 bool OverlayManager::ValidateConfig(const Config& config) const {
     if (config.dpi_scale <= 0.0f || config.dpi_scale > 10.0f) {
         LogError("DPI scale must be between 0.0 and 10.0");
+        return false;
+    }
+    if (!config.input_manager) {
+        LogError("InputManager pointer must be provided");
         return false;
     }
     return true;

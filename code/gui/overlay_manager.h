@@ -2,9 +2,15 @@
 #define OVERLAY_MANAGER_H
 
 #include <SDL.h>
+#include <functional>
 #include <memory>
 #include <string>
-#include <functional>
+
+namespace BN {
+namespace GUI {
+class InputManager;
+} // namespace GUI
+} // namespace BN
 
 class OverlayManager {
 public:
@@ -16,6 +22,7 @@ public:
         float dpi_scale = 1.0f;
         bool minimize_pause = true;
         std::string ini_filename;
+        BN::GUI::InputManager* input_manager = nullptr;
 
         Config() = default;
     };
@@ -49,6 +56,10 @@ public:
     bool IsEnabled() const;
 
     void SetEnabled(bool enabled);
+
+    bool IsPassThroughInputEnabled() const;
+
+    void SetPassThroughInput(bool enabled);
 
     bool IsMinimized() const;
 

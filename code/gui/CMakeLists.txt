@@ -12,6 +12,7 @@ find_package(SDL2 REQUIRED)
 # GUI Manager Library
 set(GUI_SOURCES
     overlay_manager.cpp
+    overlay_input_adapter.cpp
     overlay_renderer.cpp
     overlay_ui.cpp
     ui_adaptor.cpp
@@ -32,6 +33,7 @@ set(GUI_SOURCES
 
 set(GUI_HEADERS
     overlay_manager.h
+    overlay_input_adapter.h
     overlay_renderer.h
     overlay_ui.h
     ui_adaptor.h
