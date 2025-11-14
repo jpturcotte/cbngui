@@ -236,6 +236,210 @@ void RunOverlayManagerUiIntegrationTest() {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
+struct MockInventorySelector {
+    int active_column = 0;
+    std::string filter_text;
+    bool examine_invoked = false;
+    std::vector<std::string> activated_entries;
+
+    void activate_stack(const inventory_entry &entry) {
+        activated_entries.push_back(entry.hotkey);
+    }
+
+    void move_left() {
+        if (active_column > 0) {
+            --active_column;
+        }
+    }
+
+    void move_right() {
+        if (active_column < 2) {
+            ++active_column;
+        }
+    }
+
+    void append_filter_char(char ch) {
+        filter_text.push_back(ch);
+    }
+
+    void backspace_filter() {
+        if (!filter_text.empty()) {
+            filter_text.pop_back();
+        }
+    }
+
+    void examine_selected() {
+        examine_invoked = true;
+    }
+};
+
+class MockInputContext {
+public:
+    explicit MockInputContext(MockInventorySelector &selector) : selector_(selector) {}
+
+    bool handle_event(const SDL_Event &event) {
+        if (event.type != SDL_KEYDOWN) {
+            return false;
+        }
+
+        const SDL_Keycode sym = event.key.keysym.sym;
+        switch (sym) {
+            case SDLK_LEFT:
+                selector_.move_left();
+                return true;
+            case SDLK_RIGHT:
+                selector_.move_right();
+                return true;
+            case SDLK_BACKSPACE:
+                selector_.backspace_filter();
+                return true;
+            case SDLK_x:
+                selector_.examine_selected();
+                return true;
+            default:
+                if (sym >= ' ' && sym <= '~') {
+                    selector_.append_filter_char(static_cast<char>(sym));
+                    return true;
+                }
+                break;
+        }
+
+        return false;
+    }
+
+private:
+    MockInventorySelector &selector_;
+};
+
+SDL_KeyboardEvent MakeKeyEvent(SDL_Keycode key, SDL_Scancode scancode) {
+    SDL_KeyboardEvent event{};
+    event.type = SDL_KEYDOWN;
+    event.state = SDL_PRESSED;
+    event.repeat = 0;
+    event.keysym.sym = key;
+    event.keysym.scancode = scancode;
+    event.keysym.mod = KMOD_NONE;
+    return event;
+}
+
+void RunOverlayInventoryInteractionBridgeTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window *window = SDL_CreateWindow(
+        "overlay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = false;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    MockInventorySelector expected_selector;
+    MockInventorySelector actual_selector;
+
+    MockInputContext expected_context(expected_selector);
+    MockInputContext actual_context(actual_selector);
+
+    inventory_entry clicked_entry{};
+    clicked_entry.label = "Bandage";
+    clicked_entry.hotkey = "a";
+    clicked_entry.is_category = false;
+    clicked_entry.is_selected = false;
+    clicked_entry.is_highlighted = false;
+    clicked_entry.is_favorite = false;
+    clicked_entry.is_disabled = false;
+    clicked_entry.disabled_msg.clear();
+
+    auto &event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+
+    overlay_manager.SetInventoryClickHandler([
+        &actual_selector
+    ](const inventory_entry &entry) {
+        actual_selector.activate_stack(entry);
+    });
+
+    overlay_manager.SetInventoryKeyHandler([
+        &actual_context
+    ](const SDL_KeyboardEvent &key_event) {
+        SDL_Event wrapped{};
+        wrapped.type = key_event.type;
+        wrapped.key = key_event;
+        actual_context.handle_event(wrapped);
+    });
+
+    cataclysm::gui::InventoryItemClickedEvent pre_click(clicked_entry);
+    event_bus.publish(pre_click);
+    assert(actual_selector.activated_entries.empty());
+
+    SDL_KeyboardEvent sample_event = MakeKeyEvent(SDLK_RIGHT, SDL_SCANCODE_RIGHT);
+    cataclysm::gui::InventoryKeyInputEvent pre_key(sample_event);
+    event_bus.publish(pre_key);
+    assert(actual_selector.active_column == 0);
+    assert(actual_selector.filter_text.empty());
+    assert(!actual_selector.examine_invoked);
+
+    overlay_manager.Open();
+    overlay_manager.ShowInventory();
+    overlay_manager.SetFocused(true);
+
+    expected_selector.activate_stack(clicked_entry);
+
+    cataclysm::gui::InventoryItemClickedEvent click_event(clicked_entry);
+    event_bus.publish(click_event);
+    assert(actual_selector.activated_entries == expected_selector.activated_entries);
+
+    const std::vector<SDL_KeyboardEvent> key_sequence = {
+        MakeKeyEvent(SDLK_RIGHT, SDL_SCANCODE_RIGHT),
+        MakeKeyEvent(SDLK_RIGHT, SDL_SCANCODE_RIGHT),
+        MakeKeyEvent(SDLK_LEFT, SDL_SCANCODE_LEFT),
+        MakeKeyEvent(SDLK_a, SDL_SCANCODE_A),
+        MakeKeyEvent(SDLK_BACKSPACE, SDL_SCANCODE_BACKSPACE),
+        MakeKeyEvent(SDLK_x, SDL_SCANCODE_X),
+    };
+
+    for (const auto &key_event : key_sequence) {
+        SDL_Event wrapped{};
+        wrapped.type = key_event.type;
+        wrapped.key = key_event;
+        expected_context.handle_event(wrapped);
+    }
+
+    for (const auto &key_event : key_sequence) {
+        cataclysm::gui::InventoryKeyInputEvent gui_event(key_event);
+        event_bus.publish(gui_event);
+    }
+
+    assert(actual_selector.active_column == expected_selector.active_column);
+    assert(actual_selector.filter_text == expected_selector.filter_text);
+    assert(actual_selector.examine_invoked == expected_selector.examine_invoked);
+
+    overlay_manager.Close();
+
+    cataclysm::gui::InventoryItemClickedEvent post_click(clicked_entry);
+    event_bus.publish(post_click);
+    assert(actual_selector.activated_entries == expected_selector.activated_entries);
+
+    overlay_manager.HideInventory();
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
 struct EventRecorder {
     bool map_tile_hovered = false;
     bool map_tile_clicked = false;
@@ -595,6 +799,7 @@ void RunOverlayLifecycleTest(cataclysm::gui::EventBusAdapter &adapter, EventReco
 int main() {
     RunInputManagerEventRoutingTests();
     RunOverlayManagerUiIntegrationTest();
+    RunOverlayInventoryInteractionBridgeTest();
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();

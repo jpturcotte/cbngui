@@ -6,6 +6,8 @@
 #include <string>
 #include <functional>
 
+struct inventory_entry;
+
 class OverlayManager {
 public:
     struct Impl;
@@ -42,6 +44,9 @@ public:
     void StopInventoryForwarding();
     void StartCharacterForwarding();
     void StopCharacterForwarding();
+
+    void SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler);
+    void SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler);
 
     bool HandleEvent(const SDL_Event& event);
 
