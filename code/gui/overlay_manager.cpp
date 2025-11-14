@@ -2,6 +2,7 @@
 #include "overlay_renderer.h"
 #include "overlay_ui.h"
 #include "overlay_input_adapter.h"
+#include "input_manager.h"
 #include "event_bus_adapter.h"
 #include "mock_events.h"
 #include "InventoryWidget.h"
@@ -37,6 +38,7 @@ struct OverlayManager::Impl {
     std::string last_error;
 
     BN::GUI::InputManager* input_manager = nullptr;
+    std::unique_ptr<BN::GUI::InputManager> owned_input_manager;
     bool pass_through_enabled = true;
     bool inventory_widget_visible_ = false;
     std::optional<inventory_overlay_state> inventory_state_;
@@ -125,7 +127,23 @@ bool OverlayManager::Initialize(SDL_Window* window, SDL_Renderer* renderer, cons
 }
 
 bool OverlayManager::Initialize(SDL_Window* window, SDL_Renderer* renderer) {
-    return Initialize(window, renderer, Config());
+    auto default_input_manager = std::make_unique<BN::GUI::InputManager>();
+    if (!default_input_manager->Initialize()) {
+        pImpl_->LogError("Failed to initialize default InputManager");
+        return false;
+    }
+
+    Config config;
+    config.input_manager = default_input_manager.get();
+
+    const bool initialized = Initialize(window, renderer, config);
+    if (!initialized) {
+        default_input_manager->Shutdown();
+        return false;
+    }
+
+    pImpl_->owned_input_manager = std::move(default_input_manager);
+    return true;
 }
 
 bool OverlayManager::InitializeInternal(const Config& config) {
@@ -204,6 +222,13 @@ void OverlayManager::Shutdown() {
         pImpl_->overlay_renderer->Shutdown();
         pImpl_->overlay_renderer.reset();
     }
+
+    if (pImpl_->owned_input_manager) {
+        pImpl_->owned_input_manager->Shutdown();
+        pImpl_->owned_input_manager.reset();
+    }
+
+    pImpl_->input_manager = nullptr;
 
     pImpl_->is_initialized = false;
 }
