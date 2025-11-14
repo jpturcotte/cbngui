@@ -29,6 +29,14 @@ int AdjustActiveRowIndex(const character_overlay_tab& tab, int active_row_index)
     return active_row_index;
 }
 
+int AdjustRowEventIndex(const character_overlay_tab& tab, int row_index) {
+    if (tab.id == "bionics") {
+        return row_index - 1;
+    }
+
+    return row_index;
+}
+
 bool IsCharacterWindowFocused() {
     return ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows |
                                   ImGuiFocusedFlags_NoPopupHierarchy);
@@ -267,7 +275,11 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                                 row_mouse_pos.x >= row_rect.min.x && row_mouse_pos.x <= row_rect.max.x &&
                                 row_mouse_pos.y >= row_rect.min.y && row_mouse_pos.y <= row_rect.max.y;
                             if (row_clicked || row_activated || row_bounds_clicked) {
-                                event_bus_adapter_.publish(cataclysm::gui::CharacterRowActivatedEvent(tab.id, j));
+                                const int event_row_index = AdjustRowEventIndex(tab, static_cast<int>(j));
+                                if (event_row_index >= 0) {
+                                    event_bus_adapter_.publish(
+                                        cataclysm::gui::CharacterRowActivatedEvent(tab.id, event_row_index));
+                                }
                             }
                             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !row.tooltip.empty()) {
                                 ImGui::SetTooltip("%s", row.tooltip.c_str());
