@@ -96,12 +96,8 @@ bool OverlayInputAdapter::HandleEvent(const SDL_Event& event) {
         return false;
     }
 
-    bool renderer_consumed = renderer_.HandleEvent(event);
-    bool widget_consumed = ui_.ProcessEvent(event);
-
-    if (!pass_through_enabled_) {
-        return renderer_consumed || widget_consumed || overlay_active_;
-    }
+    const bool renderer_consumed = renderer_.HandleEvent(event);
+    const bool widget_consumed = ui_.ProcessEvent(event);
 
     return renderer_consumed || widget_consumed;
 }
