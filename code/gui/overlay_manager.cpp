@@ -292,7 +292,13 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
             }
         }
 
-        return renderer_consumed || widget_consumed;
+        const bool overlay_consumed = renderer_consumed || widget_consumed;
+        if (!pImpl_->pass_through_enabled) {
+            // Modal overlays consume all input while focused, even if no widget explicitly handled it.
+            return true;
+        }
+
+        return overlay_consumed;
     }
 
     return false;

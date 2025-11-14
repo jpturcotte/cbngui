@@ -219,11 +219,11 @@ void RunOverlayManagerUiIntegrationTest() {
 
     overlay_manager.SetFocused(true);
 
-    SDL_Event passthrough_event{};
-    passthrough_event.type = SDL_USEREVENT;
-    passthrough_event.user.type = SDL_USEREVENT;
+    SDL_Event modal_event{};
+    modal_event.type = SDL_USEREVENT;
+    modal_event.user.type = SDL_USEREVENT;
 
-    assert(!overlay_manager.HandleEvent(passthrough_event));
+    assert(overlay_manager.HandleEvent(modal_event));
 
     overlay_manager.Close();
     assert(ui_manager.registered_count() == 0);
