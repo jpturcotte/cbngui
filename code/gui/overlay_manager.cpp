@@ -292,13 +292,7 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
             }
         }
 
-        bool consumed = renderer_consumed || widget_consumed;
-
-        if (!consumed && !pImpl_->pass_through_enabled) {
-            consumed = true;
-        }
-
-        return consumed;
+        return renderer_consumed || widget_consumed;
     }
 
     return false;
