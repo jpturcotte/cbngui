@@ -273,6 +273,10 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
                 case SDL_WINDOWEVENT_RESTORED:
                     pImpl_->is_minimized = false;
                     break;
+                case SDL_WINDOWEVENT_RESIZED:
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+                    OnWindowResized(event.window.data1, event.window.data2);
+                    break;
             }
             pImpl_->UpdateFocusState();
             break;
