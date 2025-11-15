@@ -13,9 +13,11 @@
 #include <functional>
 #include <optional>
 #include <utility>
+#include <cassert>
 
 #include "InventoryOverlayState.h"
 #include "CharacterOverlayState.h"
+#include "debug.h"
 
 struct OverlayManager::Impl {
     SDL_Window* window = nullptr;
@@ -90,12 +92,14 @@ struct OverlayManager::Impl {
         }
         interaction_bridge->set_inventory_click_handler(inventory_click_handler);
         interaction_bridge->set_inventory_key_handler(inventory_key_handler);
+        interaction_bridge->enable_inventory_forwarding();
     }
 
     void StopInventoryForwarding() {
         if (!interaction_bridge) {
             return;
         }
+        interaction_bridge->disable_inventory_forwarding();
         interaction_bridge->set_inventory_click_handler(nullptr);
         interaction_bridge->set_inventory_key_handler(nullptr);
     }
@@ -107,12 +111,14 @@ struct OverlayManager::Impl {
         interaction_bridge->set_character_tab_handler(character_tab_handler);
         interaction_bridge->set_character_row_handler(character_row_handler);
         interaction_bridge->set_character_command_handler(character_command_handler);
+        interaction_bridge->enable_character_forwarding();
     }
 
     void StopCharacterForwarding() {
         if (!interaction_bridge) {
             return;
         }
+        interaction_bridge->disable_character_forwarding();
         interaction_bridge->set_character_tab_handler(nullptr);
         interaction_bridge->set_character_row_handler(nullptr);
         interaction_bridge->set_character_command_handler(nullptr);
@@ -331,6 +337,10 @@ void OverlayManager::UpdateInventory(const inventory_overlay_state& state) {
 }
 
 void OverlayManager::ShowInventory() {
+    if (pImpl_->inventory_widget_visible_) {
+        return;
+    }
+
     pImpl_->inventory_widget_visible_ = true;
     if (pImpl_->is_open) {
         pImpl_->StartInventoryForwarding();
@@ -339,8 +349,17 @@ void OverlayManager::ShowInventory() {
 }
 
 void OverlayManager::HideInventory() {
+    if (!pImpl_->inventory_widget_visible_) {
+        return;
+    }
+
     pImpl_->inventory_widget_visible_ = false;
     pImpl_->StopInventoryForwarding();
+    if (pImpl_->interaction_bridge) {
+        const bool active = pImpl_->interaction_bridge->is_inventory_forwarding_active();
+        debuglog(DebugLevel::Debug, "Inventory bridge forwarding active after hide? ", active);
+        assert(!active && "Inventory forwarding should be disabled when the inventory widget is hidden.");
+    }
     pImpl_->NotifyRedraw();
 }
 
@@ -354,6 +373,10 @@ void OverlayManager::UpdateCharacter(const character_overlay_state& state) {
 }
 
 void OverlayManager::ShowCharacter() {
+    if (pImpl_->character_widget_visible_) {
+        return;
+    }
+
     pImpl_->character_widget_visible_ = true;
     if (pImpl_->is_open) {
         pImpl_->StartCharacterForwarding();
@@ -362,8 +385,17 @@ void OverlayManager::ShowCharacter() {
 }
 
 void OverlayManager::HideCharacter() {
+    if (!pImpl_->character_widget_visible_) {
+        return;
+    }
+
     pImpl_->character_widget_visible_ = false;
     pImpl_->StopCharacterForwarding();
+    if (pImpl_->interaction_bridge) {
+        const bool active = pImpl_->interaction_bridge->is_character_forwarding_active();
+        debuglog(DebugLevel::Debug, "Character bridge forwarding active after hide? ", active);
+        assert(!active && "Character forwarding should be disabled when the character widget is hidden.");
+    }
     pImpl_->NotifyRedraw();
 }
 
