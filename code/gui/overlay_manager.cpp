@@ -49,12 +49,11 @@ struct OverlayManager::Impl {
     std::unique_ptr<cataclysm::gui::UiAdaptor> ui_adaptor;
     bool registered_with_ui_manager = false;
 
-    std::function<void(const inventory_entry&)> inventory_click_handler = [](const inventory_entry&) {};
-    std::function<void(const SDL_KeyboardEvent&)> inventory_key_handler = [](const SDL_KeyboardEvent&) {};
-    std::function<void(const std::string&)> character_tab_handler = [](const std::string&) {};
-    std::function<void(const std::string&, int)> character_row_handler = [](const std::string&, int) {};
-    std::function<void(cataclysm::gui::CharacterCommand)> character_command_handler =
-        [](cataclysm::gui::CharacterCommand) {};
+    std::function<void(const inventory_entry&)> inventory_click_handler;
+    std::function<void(const SDL_KeyboardEvent&)> inventory_key_handler;
+    std::function<void(const std::string&)> character_tab_handler;
+    std::function<void(const std::string&, int)> character_row_handler;
+    std::function<void(cataclysm::gui::CharacterCommand)> character_command_handler;
 
     Impl() = default;
     ~Impl() = default;
@@ -90,8 +89,17 @@ struct OverlayManager::Impl {
         if (!interaction_bridge) {
             return;
         }
-        interaction_bridge->set_inventory_click_handler(inventory_click_handler);
-        interaction_bridge->set_inventory_key_handler(inventory_key_handler);
+        if (inventory_click_handler) {
+            interaction_bridge->set_inventory_click_handler(inventory_click_handler);
+        } else {
+            interaction_bridge->set_inventory_click_handler(nullptr);
+        }
+
+        if (inventory_key_handler) {
+            interaction_bridge->set_inventory_key_handler(inventory_key_handler);
+        } else {
+            interaction_bridge->set_inventory_key_handler(nullptr);
+        }
         interaction_bridge->enable_inventory_forwarding();
     }
 
@@ -108,9 +116,23 @@ struct OverlayManager::Impl {
         if (!interaction_bridge) {
             return;
         }
-        interaction_bridge->set_character_tab_handler(character_tab_handler);
-        interaction_bridge->set_character_row_handler(character_row_handler);
-        interaction_bridge->set_character_command_handler(character_command_handler);
+        if (character_tab_handler) {
+            interaction_bridge->set_character_tab_handler(character_tab_handler);
+        } else {
+            interaction_bridge->set_character_tab_handler(nullptr);
+        }
+
+        if (character_row_handler) {
+            interaction_bridge->set_character_row_handler(character_row_handler);
+        } else {
+            interaction_bridge->set_character_row_handler(nullptr);
+        }
+
+        if (character_command_handler) {
+            interaction_bridge->set_character_command_handler(character_command_handler);
+        } else {
+            interaction_bridge->set_character_command_handler(nullptr);
+        }
         interaction_bridge->enable_character_forwarding();
     }
 
@@ -125,11 +147,7 @@ struct OverlayManager::Impl {
     }
 
     void SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler) {
-        if (handler) {
-            inventory_click_handler = std::move(handler);
-        } else {
-            inventory_click_handler = [](const inventory_entry&) {};
-        }
+        inventory_click_handler = std::move(handler);
 
         if (is_open && inventory_widget_visible_) {
             StartInventoryForwarding();
@@ -137,11 +155,7 @@ struct OverlayManager::Impl {
     }
 
     void SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler) {
-        if (handler) {
-            inventory_key_handler = std::move(handler);
-        } else {
-            inventory_key_handler = [](const SDL_KeyboardEvent&) {};
-        }
+        inventory_key_handler = std::move(handler);
 
         if (is_open && inventory_widget_visible_) {
             StartInventoryForwarding();
@@ -149,11 +163,7 @@ struct OverlayManager::Impl {
     }
 
     void SetCharacterTabHandler(std::function<void(const std::string&)> handler) {
-        if (handler) {
-            character_tab_handler = std::move(handler);
-        } else {
-            character_tab_handler = [](const std::string&) {};
-        }
+        character_tab_handler = std::move(handler);
 
         if (is_open && character_widget_visible_) {
             StartCharacterForwarding();
@@ -161,11 +171,7 @@ struct OverlayManager::Impl {
     }
 
     void SetCharacterRowHandler(std::function<void(const std::string&, int)> handler) {
-        if (handler) {
-            character_row_handler = std::move(handler);
-        } else {
-            character_row_handler = [](const std::string&, int) {};
-        }
+        character_row_handler = std::move(handler);
 
         if (is_open && character_widget_visible_) {
             StartCharacterForwarding();
@@ -173,11 +179,7 @@ struct OverlayManager::Impl {
     }
 
     void SetCharacterCommandHandler(std::function<void(cataclysm::gui::CharacterCommand)> handler) {
-        if (handler) {
-            character_command_handler = std::move(handler);
-        } else {
-            character_command_handler = [](cataclysm::gui::CharacterCommand) {};
-        }
+        character_command_handler = std::move(handler);
 
         if (is_open && character_widget_visible_) {
             StartCharacterForwarding();
