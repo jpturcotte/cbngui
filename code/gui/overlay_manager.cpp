@@ -518,8 +518,21 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
 
         const bool overlay_consumed = renderer_consumed || widget_consumed;
         if (!pImpl_->pass_through_enabled) {
-            // Modal overlays consume all input while focused, even if no widget explicitly handled it.
-            return true;
+            switch (event.type) {
+                case SDL_QUIT:
+                case SDL_APP_TERMINATING:
+                case SDL_APP_LOWMEMORY:
+                case SDL_APP_WILLENTERBACKGROUND:
+                case SDL_APP_DIDENTERBACKGROUND:
+                case SDL_APP_WILLENTERFOREGROUND:
+                case SDL_APP_DIDENTERFOREGROUND:
+                    // Allow application lifecycle events to propagate so the main loop can respond.
+                    return false;
+                default:
+                    // Modal overlays consume all other input while focused, even if no widget explicitly
+                    // handled it.
+                    return true;
+            }
         }
 
         return overlay_consumed;
