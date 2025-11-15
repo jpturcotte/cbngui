@@ -33,15 +33,58 @@ OverlayInteractionBridge::OverlayInteractionBridge(EventBusAdapter& event_bus_ad
       inventory_key_handler_(make_inventory_key_default()),
       character_tab_handler_(make_character_tab_default()),
       character_row_handler_(make_character_row_default()),
-      character_command_handler_(make_character_command_default()) {
-    register_subscriptions();
-}
+      character_command_handler_(make_character_command_default()) {}
 
 OverlayInteractionBridge::~OverlayInteractionBridge() {
-    unregister_subscriptions();
+    disable_inventory_forwarding();
+    disable_character_forwarding();
 }
 
-void OverlayInteractionBridge::register_subscriptions() {
+void OverlayInteractionBridge::enable_inventory_forwarding() {
+    if (inventory_forwarding_active_) {
+        return;
+    }
+
+    register_inventory_subscriptions();
+    inventory_forwarding_active_ = true;
+}
+
+void OverlayInteractionBridge::disable_inventory_forwarding() {
+    if (!inventory_forwarding_active_) {
+        return;
+    }
+
+    unregister_inventory_subscriptions();
+    inventory_forwarding_active_ = false;
+}
+
+bool OverlayInteractionBridge::is_inventory_forwarding_active() const {
+    return inventory_forwarding_active_;
+}
+
+void OverlayInteractionBridge::enable_character_forwarding() {
+    if (character_forwarding_active_) {
+        return;
+    }
+
+    register_character_subscriptions();
+    character_forwarding_active_ = true;
+}
+
+void OverlayInteractionBridge::disable_character_forwarding() {
+    if (!character_forwarding_active_) {
+        return;
+    }
+
+    unregister_character_subscriptions();
+    character_forwarding_active_ = false;
+}
+
+bool OverlayInteractionBridge::is_character_forwarding_active() const {
+    return character_forwarding_active_;
+}
+
+void OverlayInteractionBridge::register_inventory_subscriptions() {
     inventory_click_subscription_ = event_bus_adapter_.subscribe<InventoryItemClickedEvent>(
         [this](const InventoryItemClickedEvent& event) {
             inventory_click_handler_(event.getEntry());
@@ -51,7 +94,14 @@ void OverlayInteractionBridge::register_subscriptions() {
         [this](const InventoryKeyInputEvent& event) {
             inventory_key_handler_(event.getKeyEvent());
         });
+}
 
+void OverlayInteractionBridge::unregister_inventory_subscriptions() {
+    unsubscribe_and_reset(inventory_click_subscription_);
+    unsubscribe_and_reset(inventory_key_subscription_);
+}
+
+void OverlayInteractionBridge::register_character_subscriptions() {
     character_tab_subscription_ = event_bus_adapter_.subscribe<CharacterTabRequestedEvent>(
         [this](const CharacterTabRequestedEvent& event) {
             character_tab_handler_(event.getTabId());
@@ -68,9 +118,7 @@ void OverlayInteractionBridge::register_subscriptions() {
         });
 }
 
-void OverlayInteractionBridge::unregister_subscriptions() {
-    unsubscribe_and_reset(inventory_click_subscription_);
-    unsubscribe_and_reset(inventory_key_subscription_);
+void OverlayInteractionBridge::unregister_character_subscriptions() {
     unsubscribe_and_reset(character_tab_subscription_);
     unsubscribe_and_reset(character_row_subscription_);
     unsubscribe_and_reset(character_command_subscription_);
