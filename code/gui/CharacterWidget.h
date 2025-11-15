@@ -1,6 +1,8 @@
 #ifndef CHARACTER_WIDGET_H
 #define CHARACTER_WIDGET_H
 
+#include <SDL_events.h>
+
 #include "CharacterOverlayState.h"
 #include "event_bus_adapter.h"
 
@@ -15,6 +17,7 @@ public:
     CharacterWidget& operator=(CharacterWidget&&) = delete;
 
     void Draw(const character_overlay_state& state);
+    bool HandleEvent(const SDL_Event& event, const character_overlay_state& state);
 
     [[nodiscard]] bool GetTabRect(const std::string& tab_id, ImVec2* min, ImVec2* max) const;
     [[nodiscard]] bool GetRowRect(const std::string& tab_id, size_t row_index, ImVec2* min, ImVec2* max) const;

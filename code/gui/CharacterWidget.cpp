@@ -1,7 +1,10 @@
 #include "CharacterWidget.h"
 
+#include <SDL.h>
+
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -42,57 +45,170 @@ bool IsCharacterWindowFocused() {
                                   ImGuiFocusedFlags_NoPopupHierarchy);
 }
 
-void HandleCommandKeys(cataclysm::gui::EventBusAdapter& event_bus_adapter) {
-    if (!IsCharacterWindowFocused()) {
-        return;
+std::string TrimCopy(const std::string& value) {
+    const auto first = value.find_first_not_of(" \t");
+    if (first == std::string::npos) {
+        return std::string();
     }
-
-    auto publish_command = [&](cataclysm::gui::CharacterCommand command) {
-        event_bus_adapter.publish(cataclysm::gui::CharacterCommandEvent(command));
-    };
-
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-        publish_command(cataclysm::gui::CharacterCommand::QUIT);
-    }
-
-    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
-        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
-        publish_command(cataclysm::gui::CharacterCommand::CONFIRM);
-    }
-
-    if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
-        publish_command(cataclysm::gui::CharacterCommand::RENAME);
-    }
-
-    if (ImGui::IsKeyPressed(ImGuiKey_F1, false) ||
-        (ImGui::IsKeyPressed(ImGuiKey_Slash, false) && ImGui::GetIO().KeyShift)) {
-        publish_command(cataclysm::gui::CharacterCommand::HELP);
-    }
+    const auto last = value.find_last_not_of(" \t");
+    return value.substr(first, last - first + 1);
 }
 
-void HandleTabNavigation(const character_overlay_state& state,
-                         cataclysm::gui::EventBusAdapter& event_bus_adapter) {
-    if (!IsCharacterWindowFocused() || state.tabs.empty()) {
-        return;
+std::string ToUpperCopy(const std::string& value) {
+    std::string result;
+    result.reserve(value.size());
+    for (char ch : value) {
+        result.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
     }
+    return result;
+}
 
-    const int tab_count = static_cast<int>(state.tabs.size());
-    const int active_index = std::clamp(state.active_tab_index, 0, tab_count - 1);
-
-    const bool shift_held = ImGui::GetIO().KeyShift;
-    if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {
-        int target_index = active_index;
-        if (shift_held) {
-            target_index = (active_index - 1 + tab_count) % tab_count;
+std::vector<std::string> SplitBindingTokens(const std::string& binding) {
+    std::vector<std::string> tokens;
+    std::string current;
+    for (char ch : binding) {
+        if (ch == '+') {
+            tokens.push_back(TrimCopy(current));
+            current.clear();
         } else {
-            target_index = (active_index + 1) % tab_count;
-        }
-
-        if (target_index != active_index) {
-            event_bus_adapter.publish(
-                cataclysm::gui::CharacterTabRequestedEvent(state.tabs[target_index].id));
+            current.push_back(ch);
         }
     }
+    tokens.push_back(TrimCopy(current));
+    return tokens;
+}
+
+SDL_Keycode LookupKeycode(const std::string& token) {
+    if (token.empty()) {
+        return SDLK_UNKNOWN;
+    }
+
+    SDL_Keycode keycode = SDL_GetKeyFromName(token.c_str());
+    if (keycode != SDLK_UNKNOWN) {
+        return keycode;
+    }
+
+    const std::string upper = ToUpperCopy(token);
+    if (upper == "ESC" || upper == "ESCAPE") {
+        return SDLK_ESCAPE;
+    }
+    if (upper == "ENTER" || upper == "RETURN") {
+        return SDLK_RETURN;
+    }
+    if (upper == "SPACE" || upper == "SPACEBAR") {
+        return SDLK_SPACE;
+    }
+    if (upper == "DEL" || upper == "DELETE") {
+        return SDLK_DELETE;
+    }
+    if (upper == "PGUP" || upper == "PAGEUP") {
+        return SDLK_PAGEUP;
+    }
+    if (upper == "PGDN" || upper == "PAGEDOWN") {
+        return SDLK_PAGEDOWN;
+    }
+
+    if (token.size() == 1) {
+        return static_cast<SDL_Keycode>(static_cast<unsigned char>(token.front()));
+    }
+
+    return SDLK_UNKNOWN;
+}
+
+struct ParsedBinding {
+    bool require_shift = false;
+    bool require_ctrl = false;
+    bool require_alt = false;
+    bool require_gui = false;
+    SDL_Keycode keycode = SDLK_UNKNOWN;
+};
+
+ParsedBinding ParseBinding(const std::string& binding) {
+    ParsedBinding parsed;
+    if (binding.empty()) {
+        return parsed;
+    }
+
+    const auto tokens = SplitBindingTokens(binding);
+    for (const auto& token : tokens) {
+        if (token.empty()) {
+            continue;
+        }
+        const std::string upper = ToUpperCopy(token);
+        if (upper == "SHIFT") {
+            parsed.require_shift = true;
+            continue;
+        }
+        if (upper == "CTRL" || upper == "CONTROL" || upper == "CTL") {
+            parsed.require_ctrl = true;
+            continue;
+        }
+        if (upper == "ALT") {
+            parsed.require_alt = true;
+            continue;
+        }
+        if (upper == "GUI" || upper == "META" || upper == "WIN" || upper == "SUPER") {
+            parsed.require_gui = true;
+            continue;
+        }
+
+        if (parsed.keycode == SDLK_UNKNOWN) {
+            parsed.keycode = LookupKeycode(token);
+        }
+    }
+
+    if (parsed.keycode == SDLK_UNKNOWN) {
+        parsed.keycode = LookupKeycode(binding);
+    }
+
+    return parsed;
+}
+
+bool IsPrintableKey(SDL_Keycode keycode) {
+    const int value = static_cast<int>(keycode);
+    return value >= 32 && value <= 126;
+}
+
+bool MatchesBinding(const SDL_KeyboardEvent& key_event, const ParsedBinding& binding) {
+    if (binding.keycode == SDLK_UNKNOWN) {
+        return false;
+    }
+
+    if (key_event.keysym.sym != binding.keycode) {
+        return false;
+    }
+
+    const SDL_Keymod mods = static_cast<SDL_Keymod>(key_event.keysym.mod);
+    const bool shift_down = (mods & KMOD_SHIFT) != 0;
+    const bool ctrl_down = (mods & KMOD_CTRL) != 0;
+    const bool alt_down = (mods & KMOD_ALT) != 0;
+    const bool gui_down = (mods & KMOD_GUI) != 0;
+
+    if (binding.require_shift && !shift_down) {
+        return false;
+    }
+    if (!binding.require_shift && shift_down && !IsPrintableKey(binding.keycode)) {
+        return false;
+    }
+    if (binding.require_ctrl != ctrl_down) {
+        return false;
+    }
+    if (binding.require_alt != alt_down) {
+        return false;
+    }
+    if (binding.require_gui != gui_down) {
+        return false;
+    }
+
+    return true;
+}
+
+bool MatchesBinding(const SDL_KeyboardEvent& key_event, const std::string& binding) {
+    if (binding.empty()) {
+        return false;
+    }
+
+    return MatchesBinding(key_event, ParseBinding(binding));
 }
 
 void DrawInfoPanel(std::string_view text) {
@@ -353,10 +469,73 @@ void CharacterWidget::Draw(const character_overlay_state& state) {
                 state.bindings.quit.c_str(),
                 state.bindings.rename.c_str());
 
-    HandleCommandKeys(event_bus_adapter_);
-    HandleTabNavigation(state, event_bus_adapter_);
-
     ImGui::End();
+}
+
+bool CharacterWidget::HandleEvent(const SDL_Event& event, const character_overlay_state& state) {
+    if (event.type != SDL_KEYDOWN) {
+        return false;
+    }
+
+    if (!IsCharacterWindowFocused()) {
+        return false;
+    }
+
+    const SDL_KeyboardEvent& key_event = event.key;
+    if (key_event.repeat != 0) {
+        return false;
+    }
+
+    auto publish_command = [&](cataclysm::gui::CharacterCommand command) {
+        event_bus_adapter_.publish(cataclysm::gui::CharacterCommandEvent(command));
+    };
+
+    if (MatchesBinding(key_event, state.bindings.quit)) {
+        publish_command(cataclysm::gui::CharacterCommand::QUIT);
+        return true;
+    }
+
+    if (MatchesBinding(key_event, state.bindings.confirm)) {
+        publish_command(cataclysm::gui::CharacterCommand::CONFIRM);
+        return true;
+    }
+
+    if (MatchesBinding(key_event, state.bindings.rename)) {
+        publish_command(cataclysm::gui::CharacterCommand::RENAME);
+        return true;
+    }
+
+    if (MatchesBinding(key_event, state.bindings.help)) {
+        publish_command(cataclysm::gui::CharacterCommand::HELP);
+        return true;
+    }
+
+    if (state.tabs.empty()) {
+        return false;
+    }
+
+    const int tab_count = static_cast<int>(state.tabs.size());
+    const int active_index = std::clamp(state.active_tab_index, 0, tab_count - 1);
+
+    if (MatchesBinding(key_event, state.bindings.back_tab)) {
+        const int target_index = (active_index - 1 + tab_count) % tab_count;
+        if (target_index != active_index) {
+            event_bus_adapter_.publish(
+                cataclysm::gui::CharacterTabRequestedEvent(state.tabs[target_index].id));
+        }
+        return true;
+    }
+
+    if (MatchesBinding(key_event, state.bindings.tab)) {
+        const int target_index = (active_index + 1) % tab_count;
+        if (target_index != active_index) {
+            event_bus_adapter_.publish(
+                cataclysm::gui::CharacterTabRequestedEvent(state.tabs[target_index].id));
+        }
+        return true;
+    }
+
+    return false;
 }
 
 void CharacterWidget::RecordRect(std::vector<InteractiveRect>& container, const std::string& id) {

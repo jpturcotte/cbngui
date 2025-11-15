@@ -322,9 +322,11 @@ void InventoryWidget::Draw(const inventory_overlay_state& state) {
     const float table_width = ImGui::GetContentRegionAvail().x;
     const float column_width = table_width / 3.0f;
     if (ImGui::BeginTable("InventoryColumns", 3, table_flags)) {
-        ImGui::TableSetupColumn("Worn", ImGuiTableColumnFlags_WidthFixed, column_width);
-        ImGui::TableSetupColumn("Inventory", ImGuiTableColumnFlags_WidthFixed, column_width);
-        ImGui::TableSetupColumn("Ground", ImGuiTableColumnFlags_WidthFixed, column_width);
+        for (int column_index = 0; column_index < 3; ++column_index) {
+            const auto& column = state.columns[column_index];
+            const char* column_name = column.name.c_str();
+            ImGui::TableSetupColumn(column_name, ImGuiTableColumnFlags_WidthFixed, column_width);
+        }
         for (int column_index = 0; column_index < 3; ++column_index) {
             ImGui::TableNextColumn();
             DrawInventoryColumn(state.columns[column_index], column_index, state.active_column);
