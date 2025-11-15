@@ -64,6 +64,12 @@ private:
 
     void unsubscribe_and_reset(std::shared_ptr<EventSubscription>& subscription);
 
+    std::function<void(const inventory_entry&)> make_inventory_click_default();
+    std::function<void(const SDL_KeyboardEvent&)> make_inventory_key_default();
+    std::function<void(const std::string&)> make_character_tab_default();
+    std::function<void(const std::string&, int)> make_character_row_default();
+    std::function<void(CharacterCommand)> make_character_command_default();
+
     template<typename Handler, typename DefaultHandler>
     void assign_or_default(Handler& target, Handler&& incoming, DefaultHandler&& default_handler) {
         if (incoming) {

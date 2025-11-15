@@ -704,6 +704,96 @@ void RunOverlayInventoryBridgeModalEventTest() {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
+void RunOverlayInventoryBridgeDefaultForwardingTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window* window = SDL_CreateWindow(
+        "overlay",
+        SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED,
+        640,
+        480,
+        SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = false;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    auto& event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+
+    bool click_forwarded = false;
+    std::string forwarded_hotkey;
+    auto click_sub = event_bus.subscribe<cataclysm::gui::InventoryOverlayForwardedClickEvent>(
+        [&click_forwarded, &forwarded_hotkey](const cataclysm::gui::InventoryOverlayForwardedClickEvent& event) {
+            click_forwarded = true;
+            forwarded_hotkey = event.getEntry().hotkey;
+        });
+
+    bool key_forwarded = false;
+    SDL_Keycode forwarded_key = SDLK_UNKNOWN;
+    auto key_sub = event_bus.subscribe<cataclysm::gui::InventoryOverlayForwardedKeyEvent>(
+        [&key_forwarded, &forwarded_key](const cataclysm::gui::InventoryOverlayForwardedKeyEvent& event) {
+            key_forwarded = true;
+            forwarded_key = event.getKeyEvent().keysym.sym;
+        });
+
+    overlay_manager.Open();
+    overlay_manager.ShowInventory();
+    overlay_manager.SetFocused(true);
+
+    inventory_overlay_state overlay_state{};
+    overlay_state.title = "Inventory";
+    overlay_state.active_column = 0;
+    overlay_state.columns[0].name = "Worn";
+    overlay_state.columns[1].name = "Inventory";
+    overlay_state.columns[2].name = "Ground";
+    overlay_manager.UpdateInventory(overlay_state);
+
+    inventory_entry sample_entry{};
+    sample_entry.label = "Bandage";
+    sample_entry.hotkey = "z";
+    sample_entry.is_category = false;
+
+    cataclysm::gui::InventoryItemClickedEvent click_event(sample_entry);
+    event_bus.publish(click_event);
+
+    SDL_KeyboardEvent key_event = MakeKeyEvent(SDLK_LEFT, SDL_SCANCODE_LEFT);
+    cataclysm::gui::InventoryKeyInputEvent key_input(key_event);
+    event_bus.publish(key_input);
+
+    assert(click_forwarded);
+    assert(forwarded_hotkey == sample_entry.hotkey);
+    assert(key_forwarded);
+    assert(forwarded_key == key_event.keysym.sym);
+
+    overlay_manager.Close();
+    overlay_manager.HideInventory();
+
+    click_sub->unsubscribe();
+    key_sub->unsubscribe();
+
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
 void RunOverlayCharacterBridgeModalEventTest() {
     SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
 
@@ -815,6 +905,108 @@ void RunOverlayCharacterBridgeModalEventTest() {
 
     overlay_manager.Close();
     overlay_manager.HideCharacter();
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+void RunOverlayCharacterBridgeDefaultForwardingTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window* window = SDL_CreateWindow(
+        "overlay",
+        SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED,
+        640,
+        480,
+        SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = false;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    auto& event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+
+    bool tab_forwarded = false;
+    std::string forwarded_tab;
+    auto tab_sub = event_bus.subscribe<cataclysm::gui::CharacterOverlayForwardedTabEvent>(
+        [&tab_forwarded, &forwarded_tab](const cataclysm::gui::CharacterOverlayForwardedTabEvent& event) {
+            tab_forwarded = true;
+            forwarded_tab = event.getTabId();
+        });
+
+    bool row_forwarded = false;
+    std::string forwarded_row_tab;
+    int forwarded_row_index = -1;
+    auto row_sub = event_bus.subscribe<cataclysm::gui::CharacterOverlayForwardedRowEvent>(
+        [&row_forwarded, &forwarded_row_tab, &forwarded_row_index](
+            const cataclysm::gui::CharacterOverlayForwardedRowEvent& event) {
+            row_forwarded = true;
+            forwarded_row_tab = event.getTabId();
+            forwarded_row_index = event.getRowIndex();
+        });
+
+    bool command_forwarded = false;
+    cataclysm::gui::CharacterCommand forwarded_command = cataclysm::gui::CharacterCommand::HELP;
+    auto command_sub = event_bus.subscribe<cataclysm::gui::CharacterOverlayForwardedCommandEvent>(
+        [&command_forwarded, &forwarded_command](
+            const cataclysm::gui::CharacterOverlayForwardedCommandEvent& event) {
+            command_forwarded = true;
+            forwarded_command = event.getCommand();
+        });
+
+    overlay_manager.Open();
+    overlay_manager.ShowCharacter();
+    overlay_manager.SetFocused(true);
+
+    character_overlay_state character_state{};
+    character_state.header_left = "Stats";
+    character_state.tabs.push_back({ "stats", "Stats", {} });
+    character_state.tabs.push_back({ "skills", "Skills", {} });
+    character_state.active_tab_index = 0;
+    overlay_manager.UpdateCharacter(character_state);
+
+    cataclysm::gui::CharacterTabRequestedEvent tab_event("skills");
+    event_bus.publish(tab_event);
+
+    cataclysm::gui::CharacterRowActivatedEvent row_event("effects", 1);
+    event_bus.publish(row_event);
+
+    cataclysm::gui::CharacterCommandEvent command_event(cataclysm::gui::CharacterCommand::CONFIRM);
+    event_bus.publish(command_event);
+
+    assert(tab_forwarded);
+    assert(forwarded_tab == "skills");
+    assert(row_forwarded);
+    assert(forwarded_row_tab == "effects");
+    assert(forwarded_row_index == 1);
+    assert(command_forwarded);
+    assert(forwarded_command == cataclysm::gui::CharacterCommand::CONFIRM);
+
+    overlay_manager.Close();
+    overlay_manager.HideCharacter();
+
+    tab_sub->unsubscribe();
+    row_sub->unsubscribe();
+    command_sub->unsubscribe();
+
     overlay_manager.Shutdown();
 
     SDL_DestroyRenderer(renderer);
@@ -1185,6 +1377,8 @@ int main() {
     RunOverlayCharacterInteractionBridgeTest();
     RunOverlayInventoryBridgeModalEventTest();
     RunOverlayCharacterBridgeModalEventTest();
+    RunOverlayInventoryBridgeDefaultForwardingTest();
+    RunOverlayCharacterBridgeDefaultForwardingTest();
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
