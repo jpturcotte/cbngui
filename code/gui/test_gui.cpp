@@ -220,16 +220,37 @@ void RunOverlayManagerUiIntegrationTest() {
 
     overlay_manager.SetFocused(true);
 
-    SDL_Event modal_event{};
-    modal_event.type = SDL_USEREVENT;
-    modal_event.user.type = SDL_USEREVENT;
+    overlay_manager.ShowInventory();
 
-    assert(overlay_manager.HandleEvent(modal_event));
+    inventory_overlay_state modal_inventory_state{};
+    modal_inventory_state.active_column = 0;
+    modal_inventory_state.columns[0].name = "Worn";
+    modal_inventory_state.columns[1].name = "Inventory";
+    modal_inventory_state.columns[2].name = "Ground";
+    overlay_manager.UpdateInventory(modal_inventory_state);
+
+    SDL_Event handled_key{};
+    handled_key.type = SDL_KEYDOWN;
+    handled_key.key.type = SDL_KEYDOWN;
+    handled_key.key.state = SDL_PRESSED;
+    handled_key.key.repeat = 0;
+    handled_key.key.keysym.sym = SDLK_RIGHT;
+    handled_key.key.keysym.scancode = SDL_SCANCODE_RIGHT;
+    handled_key.key.keysym.mod = KMOD_NONE;
+
+    assert(overlay_manager.HandleEvent(handled_key));
+
+    SDL_Event unhandled_event{};
+    unhandled_event.type = SDL_USEREVENT;
+    unhandled_event.user.type = SDL_USEREVENT;
+
+    assert(!overlay_manager.HandleEvent(unhandled_event));
 
     overlay_manager.Close();
     assert(ui_manager.registered_count() == 0);
     assert(!overlay_manager.IsOpen());
 
+    overlay_manager.HideInventory();
     overlay_manager.Shutdown();
 
     SDL_DestroyRenderer(renderer);
@@ -575,6 +596,224 @@ void RunOverlayCharacterInteractionBridgeTest() {
     assert(actual_display.active_tab_index == closed_tab_index);
     assert(actual_display.active_row_index == closed_row_index);
 
+    overlay_manager.HideCharacter();
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+void RunOverlayInventoryBridgeModalEventTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window *window = SDL_CreateWindow(
+        "overlay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = false;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    bool inventory_key_forwarded = false;
+    SDL_Keycode forwarded_keycode = SDLK_UNKNOWN;
+    bool inventory_click_forwarded = false;
+    std::string forwarded_hotkey;
+
+    overlay_manager.SetInventoryKeyHandler([
+        &inventory_key_forwarded,
+        &forwarded_keycode
+    ](const SDL_KeyboardEvent &key_event) {
+        inventory_key_forwarded = true;
+        forwarded_keycode = key_event.keysym.sym;
+    });
+
+    overlay_manager.SetInventoryClickHandler([
+        &inventory_click_forwarded,
+        &forwarded_hotkey
+    ](const inventory_entry &entry) {
+        inventory_click_forwarded = true;
+        forwarded_hotkey = entry.hotkey;
+    });
+
+    auto &event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+
+    inventory_entry sample_entry{};
+    sample_entry.label = "Bandage";
+    sample_entry.hotkey = "z";
+    sample_entry.is_category = false;
+
+    cataclysm::gui::InventoryItemClickedEvent pre_open_click(sample_entry);
+    event_bus.publish(pre_open_click);
+    assert(!inventory_click_forwarded);
+
+    overlay_manager.Open();
+    overlay_manager.ShowInventory();
+    overlay_manager.SetFocused(true);
+
+    inventory_overlay_state overlay_state{};
+    overlay_state.title = "Inventory";
+    overlay_state.active_column = 0;
+    overlay_state.columns[0].name = "Worn";
+    overlay_state.columns[1].name = "Inventory";
+    overlay_state.columns[2].name = "Ground";
+    overlay_manager.UpdateInventory(overlay_state);
+
+    SDL_Event handled_key{};
+    handled_key.type = SDL_KEYDOWN;
+    handled_key.key.type = SDL_KEYDOWN;
+    handled_key.key.state = SDL_PRESSED;
+    handled_key.key.repeat = 0;
+    handled_key.key.keysym.sym = SDLK_LEFT;
+    handled_key.key.keysym.scancode = SDL_SCANCODE_LEFT;
+    handled_key.key.keysym.mod = KMOD_NONE;
+
+    inventory_key_forwarded = false;
+    forwarded_keycode = SDLK_UNKNOWN;
+    assert(overlay_manager.HandleEvent(handled_key));
+    assert(inventory_key_forwarded);
+    assert(forwarded_keycode == SDLK_LEFT);
+
+    inventory_click_forwarded = false;
+    forwarded_hotkey.clear();
+    cataclysm::gui::InventoryItemClickedEvent click_event(sample_entry);
+    event_bus.publish(click_event);
+    assert(inventory_click_forwarded);
+    assert(forwarded_hotkey == sample_entry.hotkey);
+
+    overlay_manager.Close();
+    overlay_manager.HideInventory();
+    overlay_manager.Shutdown();
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+void RunOverlayCharacterBridgeModalEventTest() {
+    SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        assert(!"SDL_InitSubSystem(SDL_INIT_VIDEO) failed");
+    }
+
+    SDL_Window *window = SDL_CreateWindow(
+        "overlay", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_HIDDEN);
+    assert(window != nullptr);
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    }
+    assert(renderer != nullptr);
+
+    OverlayManager overlay_manager;
+    OverlayManager::Config config;
+    config.enabled = true;
+    config.pass_through_input = false;
+    config.dpi_scale = 1.0f;
+
+    assert(overlay_manager.Initialize(window, renderer, config));
+
+    bool character_tab_forwarded = false;
+    std::string forwarded_tab_id;
+    bool character_row_forwarded = false;
+    std::string forwarded_row_tab;
+    int forwarded_row_index = -1;
+    bool character_command_forwarded = false;
+    cataclysm::gui::CharacterCommand forwarded_command = cataclysm::gui::CharacterCommand::HELP;
+
+    overlay_manager.SetCharacterTabHandler([
+        &character_tab_forwarded,
+        &forwarded_tab_id
+    ](const std::string &tab_id) {
+        character_tab_forwarded = true;
+        forwarded_tab_id = tab_id;
+    });
+
+    overlay_manager.SetCharacterRowHandler([
+        &character_row_forwarded,
+        &forwarded_row_tab,
+        &forwarded_row_index
+    ](const std::string &tab_id, int row_index) {
+        character_row_forwarded = true;
+        forwarded_row_tab = tab_id;
+        forwarded_row_index = row_index;
+    });
+
+    overlay_manager.SetCharacterCommandHandler([
+        &character_command_forwarded,
+        &forwarded_command
+    ](cataclysm::gui::CharacterCommand command) {
+        character_command_forwarded = true;
+        forwarded_command = command;
+    });
+
+    auto &event_bus = cataclysm::gui::EventBusManager::getGlobalEventBus();
+
+    cataclysm::gui::CharacterTabRequestedEvent pre_open_tab("stats");
+    event_bus.publish(pre_open_tab);
+    assert(!character_tab_forwarded);
+
+    overlay_manager.Open();
+    overlay_manager.ShowCharacter();
+    overlay_manager.SetFocused(true);
+
+    character_overlay_state character_state{};
+    character_state.header_left = "Character";
+    character_state.header_right = "[?]";
+    character_state.info_panel_text = "Info";
+    character_state.tabs.push_back({ "stats", "Stats", {} });
+    character_state.tabs.push_back({ "skills", "Skills", {} });
+    character_state.tabs.push_back({ "traits", "Traits", {} });
+    character_state.tabs.push_back({ "effects", "Effects", {} });
+    character_state.tabs.back().rows.push_back({ "Effect A", "", "", IM_COL32(255, 255, 255, 255), false });
+    character_state.tabs.back().rows.push_back({ "Effect B", "", "", IM_COL32(255, 255, 255, 255), false });
+    character_state.active_tab_index = 1;
+    character_state.active_row_index = 0;
+    character_state.footer_lines = { "Footer" };
+    character_state.bindings = { "?", "TAB", "SHIFT+TAB", "ENTER", "ESC", "r" };
+
+    overlay_manager.UpdateCharacter(character_state);
+
+    character_tab_forwarded = false;
+    forwarded_tab_id.clear();
+    cataclysm::gui::CharacterTabRequestedEvent tab_event("skills");
+    event_bus.publish(tab_event);
+    assert(character_tab_forwarded);
+    assert(forwarded_tab_id == "skills");
+
+    character_row_forwarded = false;
+    forwarded_row_tab.clear();
+    forwarded_row_index = -1;
+    cataclysm::gui::CharacterRowActivatedEvent row_event("effects", 1);
+    event_bus.publish(row_event);
+    assert(character_row_forwarded);
+    assert(forwarded_row_tab == "effects");
+    assert(forwarded_row_index == 1);
+
+    character_command_forwarded = false;
+    forwarded_command = cataclysm::gui::CharacterCommand::HELP;
+    cataclysm::gui::CharacterCommandEvent command_event(cataclysm::gui::CharacterCommand::CONFIRM);
+    event_bus.publish(command_event);
+    assert(character_command_forwarded);
+    assert(forwarded_command == cataclysm::gui::CharacterCommand::CONFIRM);
+
+    overlay_manager.Close();
     overlay_manager.HideCharacter();
     overlay_manager.Shutdown();
 
@@ -944,6 +1183,8 @@ int main() {
     RunOverlayManagerUiIntegrationTest();
     RunOverlayInventoryInteractionBridgeTest();
     RunOverlayCharacterInteractionBridgeTest();
+    RunOverlayInventoryBridgeModalEventTest();
+    RunOverlayCharacterBridgeModalEventTest();
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
