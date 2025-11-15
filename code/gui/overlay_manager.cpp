@@ -509,12 +509,30 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
             if (pImpl_->inventory_widget_visible_ && pImpl_->inventory_state_) {
                 widget_consumed = pImpl_->overlay_ui->GetInventoryWidget().HandleEvent(event) || widget_consumed;
             }
+            if (pImpl_->character_widget_visible_ && pImpl_->character_state_) {
+                widget_consumed = pImpl_->overlay_ui->GetCharacterWidget().HandleEvent(
+                                      event, *pImpl_->character_state_) ||
+                                  widget_consumed;
+            }
         }
 
         const bool overlay_consumed = renderer_consumed || widget_consumed;
         if (!pImpl_->pass_through_enabled) {
-            // Modal overlays consume all input while focused, even if no widget explicitly handled it.
-            return overlay_consumed;
+            switch (event.type) {
+                case SDL_QUIT:
+                case SDL_APP_TERMINATING:
+                case SDL_APP_LOWMEMORY:
+                case SDL_APP_WILLENTERBACKGROUND:
+                case SDL_APP_DIDENTERBACKGROUND:
+                case SDL_APP_WILLENTERFOREGROUND:
+                case SDL_APP_DIDENTERFOREGROUND:
+                    // Allow application lifecycle events to propagate so the main loop can respond.
+                    return false;
+                default:
+                    // Modal overlays consume all other input while focused, even if no widget explicitly
+                    // handled it.
+                    return true;
+            }
         }
 
         return overlay_consumed;
