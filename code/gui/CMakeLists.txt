@@ -14,6 +14,7 @@ set(GUI_SOURCES
     overlay_manager.cpp
     overlay_renderer.cpp
     overlay_ui.cpp
+    overlay_interaction_bridge.cpp
     ui_adaptor.cpp
     ui_manager.cpp
     map_widget.cpp
@@ -34,6 +35,7 @@ set(GUI_HEADERS
     overlay_manager.h
     overlay_renderer.h
     overlay_ui.h
+    overlay_interaction_bridge.h
     ui_adaptor.h
     ui_manager.h
     map_widget.h

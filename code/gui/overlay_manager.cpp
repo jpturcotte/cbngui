@@ -2,6 +2,7 @@
 #include "overlay_renderer.h"
 #include "overlay_ui.h"
 #include "event_bus_adapter.h"
+#include "overlay_interaction_bridge.h"
 #include "mock_events.h"
 #include "InventoryWidget.h"
 #include "ui_adaptor.h"
@@ -9,10 +10,14 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <functional>
 #include <optional>
+#include <utility>
+#include <cassert>
 
 #include "InventoryOverlayState.h"
 #include "CharacterOverlayState.h"
+#include "debug.h"
 
 struct OverlayManager::Impl {
     SDL_Window* window = nullptr;
@@ -21,6 +26,7 @@ struct OverlayManager::Impl {
     std::unique_ptr<OverlayRenderer> overlay_renderer;
     std::unique_ptr<OverlayUI> overlay_ui;
     std::unique_ptr<cataclysm::gui::EventBusAdapter> event_bus_adapter;
+    std::unique_ptr<cataclysm::gui::OverlayInteractionBridge> interaction_bridge;
 
     Config config;
     bool is_initialized = false;
@@ -42,6 +48,13 @@ struct OverlayManager::Impl {
     std::optional<character_overlay_state> character_state_;
     std::unique_ptr<cataclysm::gui::UiAdaptor> ui_adaptor;
     bool registered_with_ui_manager = false;
+
+    std::function<void(const inventory_entry&)> inventory_click_handler = [](const inventory_entry&) {};
+    std::function<void(const SDL_KeyboardEvent&)> inventory_key_handler = [](const SDL_KeyboardEvent&) {};
+    std::function<void(const std::string&)> character_tab_handler = [](const std::string&) {};
+    std::function<void(const std::string&, int)> character_row_handler = [](const std::string&, int) {};
+    std::function<void(cataclysm::gui::CharacterCommand)> character_command_handler =
+        [](cataclysm::gui::CharacterCommand) {};
 
     Impl() = default;
     ~Impl() = default;
@@ -70,6 +83,104 @@ struct OverlayManager::Impl {
         cataclysm::gui::UiManager::instance().request_redraw();
         if (redraw_callback) {
             redraw_callback();
+        }
+    }
+
+    void StartInventoryForwarding() {
+        if (!interaction_bridge) {
+            return;
+        }
+        interaction_bridge->set_inventory_click_handler(inventory_click_handler);
+        interaction_bridge->set_inventory_key_handler(inventory_key_handler);
+        interaction_bridge->enable_inventory_forwarding();
+    }
+
+    void StopInventoryForwarding() {
+        if (!interaction_bridge) {
+            return;
+        }
+        interaction_bridge->disable_inventory_forwarding();
+        interaction_bridge->set_inventory_click_handler(nullptr);
+        interaction_bridge->set_inventory_key_handler(nullptr);
+    }
+
+    void StartCharacterForwarding() {
+        if (!interaction_bridge) {
+            return;
+        }
+        interaction_bridge->set_character_tab_handler(character_tab_handler);
+        interaction_bridge->set_character_row_handler(character_row_handler);
+        interaction_bridge->set_character_command_handler(character_command_handler);
+        interaction_bridge->enable_character_forwarding();
+    }
+
+    void StopCharacterForwarding() {
+        if (!interaction_bridge) {
+            return;
+        }
+        interaction_bridge->disable_character_forwarding();
+        interaction_bridge->set_character_tab_handler(nullptr);
+        interaction_bridge->set_character_row_handler(nullptr);
+        interaction_bridge->set_character_command_handler(nullptr);
+    }
+
+    void SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler) {
+        if (handler) {
+            inventory_click_handler = std::move(handler);
+        } else {
+            inventory_click_handler = [](const inventory_entry&) {};
+        }
+
+        if (is_open && inventory_widget_visible_) {
+            StartInventoryForwarding();
+        }
+    }
+
+    void SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler) {
+        if (handler) {
+            inventory_key_handler = std::move(handler);
+        } else {
+            inventory_key_handler = [](const SDL_KeyboardEvent&) {};
+        }
+
+        if (is_open && inventory_widget_visible_) {
+            StartInventoryForwarding();
+        }
+    }
+
+    void SetCharacterTabHandler(std::function<void(const std::string&)> handler) {
+        if (handler) {
+            character_tab_handler = std::move(handler);
+        } else {
+            character_tab_handler = [](const std::string&) {};
+        }
+
+        if (is_open && character_widget_visible_) {
+            StartCharacterForwarding();
+        }
+    }
+
+    void SetCharacterRowHandler(std::function<void(const std::string&, int)> handler) {
+        if (handler) {
+            character_row_handler = std::move(handler);
+        } else {
+            character_row_handler = [](const std::string&, int) {};
+        }
+
+        if (is_open && character_widget_visible_) {
+            StartCharacterForwarding();
+        }
+    }
+
+    void SetCharacterCommandHandler(std::function<void(cataclysm::gui::CharacterCommand)> handler) {
+        if (handler) {
+            character_command_handler = std::move(handler);
+        } else {
+            character_command_handler = [](cataclysm::gui::CharacterCommand) {};
+        }
+
+        if (is_open && character_widget_visible_) {
+            StartCharacterForwarding();
         }
     }
 };
@@ -138,6 +249,7 @@ bool OverlayManager::InitializeInternal(const Config& config) {
     pImpl_->event_bus_adapter = std::make_unique<cataclysm::gui::EventBusAdapter>(cataclysm::gui::EventBusManager::getGlobalEventBus());
     pImpl_->overlay_ui = std::make_unique<OverlayUI>(*pImpl_->event_bus_adapter);
     pImpl_->event_bus_adapter->initialize();
+    pImpl_->interaction_bridge = std::make_unique<cataclysm::gui::OverlayInteractionBridge>(*pImpl_->event_bus_adapter);
 
     pImpl_->event_bus_adapter->subscribe<cataclysm::gui::UIButtonClickedEvent>([](const cataclysm::gui::UIButtonClickedEvent& event) {
         std::cout << "Button clicked event received: " << event.button_id << std::endl;
@@ -172,6 +284,10 @@ void OverlayManager::Shutdown() {
     }
 
     pImpl_->ui_adaptor.reset();
+
+    if (pImpl_->interaction_bridge) {
+        pImpl_->interaction_bridge.reset();
+    }
 
     if (pImpl_->event_bus_adapter) {
         pImpl_->event_bus_adapter->shutdown();
@@ -221,12 +337,29 @@ void OverlayManager::UpdateInventory(const inventory_overlay_state& state) {
 }
 
 void OverlayManager::ShowInventory() {
+    if (pImpl_->inventory_widget_visible_) {
+        return;
+    }
+
     pImpl_->inventory_widget_visible_ = true;
+    if (pImpl_->is_open) {
+        pImpl_->StartInventoryForwarding();
+    }
     pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideInventory() {
+    if (!pImpl_->inventory_widget_visible_) {
+        return;
+    }
+
     pImpl_->inventory_widget_visible_ = false;
+    pImpl_->StopInventoryForwarding();
+    if (pImpl_->interaction_bridge) {
+        const bool active = pImpl_->interaction_bridge->is_inventory_forwarding_active();
+        debuglog(DebugLevel::Debug, "Inventory bridge forwarding active after hide? ", active);
+        assert(!active && "Inventory forwarding should be disabled when the inventory widget is hidden.");
+    }
     pImpl_->NotifyRedraw();
 }
 
@@ -240,17 +373,103 @@ void OverlayManager::UpdateCharacter(const character_overlay_state& state) {
 }
 
 void OverlayManager::ShowCharacter() {
+    if (pImpl_->character_widget_visible_) {
+        return;
+    }
+
     pImpl_->character_widget_visible_ = true;
+    if (pImpl_->is_open) {
+        pImpl_->StartCharacterForwarding();
+    }
     pImpl_->NotifyRedraw();
 }
 
 void OverlayManager::HideCharacter() {
+    if (!pImpl_->character_widget_visible_) {
+        return;
+    }
+
     pImpl_->character_widget_visible_ = false;
+    pImpl_->StopCharacterForwarding();
+    if (pImpl_->interaction_bridge) {
+        const bool active = pImpl_->interaction_bridge->is_character_forwarding_active();
+        debuglog(DebugLevel::Debug, "Character bridge forwarding active after hide? ", active);
+        assert(!active && "Character forwarding should be disabled when the character widget is hidden.");
+    }
     pImpl_->NotifyRedraw();
 }
 
 bool OverlayManager::IsCharacterVisible() const {
     return pImpl_->character_widget_visible_;
+}
+
+void OverlayManager::StartInventoryForwarding() {
+    if (!pImpl_) {
+        return;
+    }
+    pImpl_->StartInventoryForwarding();
+}
+
+void OverlayManager::StopInventoryForwarding() {
+    if (!pImpl_) {
+        return;
+    }
+    pImpl_->StopInventoryForwarding();
+}
+
+void OverlayManager::StartCharacterForwarding() {
+    if (!pImpl_) {
+        return;
+    }
+    pImpl_->StartCharacterForwarding();
+}
+
+void OverlayManager::StopCharacterForwarding() {
+    if (!pImpl_) {
+        return;
+    }
+    pImpl_->StopCharacterForwarding();
+}
+
+void OverlayManager::SetInventoryClickHandler(std::function<void(const inventory_entry&)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetInventoryClickHandler(std::move(handler));
+}
+
+void OverlayManager::SetInventoryKeyHandler(std::function<void(const SDL_KeyboardEvent&)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetInventoryKeyHandler(std::move(handler));
+}
+
+void OverlayManager::SetCharacterTabHandler(std::function<void(const std::string&)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetCharacterTabHandler(std::move(handler));
+}
+
+void OverlayManager::SetCharacterRowHandler(std::function<void(const std::string&, int)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetCharacterRowHandler(std::move(handler));
+}
+
+void OverlayManager::SetCharacterCommandHandler(
+    std::function<void(cataclysm::gui::CharacterCommand)> handler) {
+    if (!pImpl_) {
+        return;
+    }
+
+    pImpl_->SetCharacterCommandHandler(std::move(handler));
 }
 
 bool OverlayManager::HandleEvent(const SDL_Event& event) {
@@ -292,8 +511,13 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
             }
         }
 
-        const bool consumed = renderer_consumed || widget_consumed;
-        return consumed || !pImpl_->pass_through_enabled;
+        const bool overlay_consumed = renderer_consumed || widget_consumed;
+        if (!pImpl_->pass_through_enabled) {
+            // Modal overlays consume all input while focused, even if no widget explicitly handled it.
+            return overlay_consumed;
+        }
+
+        return overlay_consumed;
     }
 
     return false;
@@ -310,6 +534,13 @@ void OverlayManager::Open() {
 
     pImpl_->is_open = true;
     pImpl_->UpdateFocusState();
+
+    if (pImpl_->inventory_widget_visible_) {
+        pImpl_->StartInventoryForwarding();
+    }
+    if (pImpl_->character_widget_visible_) {
+        pImpl_->StartCharacterForwarding();
+    }
 
     if (pImpl_->ui_adaptor && !pImpl_->registered_with_ui_manager) {
         cataclysm::gui::UiManager::instance().register_adaptor(*pImpl_->ui_adaptor);
@@ -331,6 +562,9 @@ void OverlayManager::Close() {
 
     pImpl_->is_open = false;
     pImpl_->UpdateFocusState();
+
+    pImpl_->StopInventoryForwarding();
+    pImpl_->StopCharacterForwarding();
 
     if (pImpl_->event_bus_adapter) {
         pImpl_->event_bus_adapter->publishOverlayClose(kOverlayLifecycleId, false);
