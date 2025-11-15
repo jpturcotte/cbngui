@@ -5,28 +5,6 @@
 namespace cataclysm {
 namespace gui {
 
-namespace {
-auto make_inventory_click_default() {
-    return std::function<void(const inventory_entry&)>([](const inventory_entry&) {});
-}
-
-auto make_inventory_key_default() {
-    return std::function<void(const SDL_KeyboardEvent&)>([](const SDL_KeyboardEvent&) {});
-}
-
-auto make_character_tab_default() {
-    return std::function<void(const std::string&)>([](const std::string&) {});
-}
-
-auto make_character_row_default() {
-    return std::function<void(const std::string&, int)>([](const std::string&, int) {});
-}
-
-auto make_character_command_default() {
-    return std::function<void(CharacterCommand)>([](CharacterCommand) {});
-}
-} // namespace
-
 OverlayInteractionBridge::OverlayInteractionBridge(EventBusAdapter& event_bus_adapter)
     : event_bus_adapter_(event_bus_adapter),
       inventory_click_handler_(make_inventory_click_default()),
@@ -149,6 +127,36 @@ void OverlayInteractionBridge::set_character_row_handler(std::function<void(cons
 
 void OverlayInteractionBridge::set_character_command_handler(std::function<void(CharacterCommand)> handler) {
     assign_or_default(character_command_handler_, std::move(handler), make_character_command_default());
+}
+
+std::function<void(const inventory_entry&)> OverlayInteractionBridge::make_inventory_click_default() {
+    return [this](const inventory_entry& entry) {
+        event_bus_adapter_.publish(InventoryOverlayForwardedClickEvent(entry));
+    };
+}
+
+std::function<void(const SDL_KeyboardEvent&)> OverlayInteractionBridge::make_inventory_key_default() {
+    return [this](const SDL_KeyboardEvent& key_event) {
+        event_bus_adapter_.publish(InventoryOverlayForwardedKeyEvent(key_event));
+    };
+}
+
+std::function<void(const std::string&)> OverlayInteractionBridge::make_character_tab_default() {
+    return [this](const std::string& tab_id) {
+        event_bus_adapter_.publish(CharacterOverlayForwardedTabEvent(tab_id));
+    };
+}
+
+std::function<void(const std::string&, int)> OverlayInteractionBridge::make_character_row_default() {
+    return [this](const std::string& tab_id, int row_index) {
+        event_bus_adapter_.publish(CharacterOverlayForwardedRowEvent(tab_id, row_index));
+    };
+}
+
+std::function<void(CharacterCommand)> OverlayInteractionBridge::make_character_command_default() {
+    return [this](CharacterCommand command) {
+        event_bus_adapter_.publish(CharacterOverlayForwardedCommandEvent(command));
+    };
 }
 
 } // namespace gui
