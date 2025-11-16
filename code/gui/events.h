@@ -8,6 +8,7 @@
 #include <vector>
 #include <functional>
 #include <chrono>
+#include <utility>
 #include <SDL.h>
 
 namespace cataclysm {
@@ -468,6 +469,105 @@ public:
 
 private:
     SDL_KeyboardEvent key_event_{};
+};
+
+class InventoryOverlayForwardedClickEvent : public GuiEvent {
+public:
+    InventoryOverlayForwardedClickEvent() : GuiEvent("overlay_interaction") {}
+    explicit InventoryOverlayForwardedClickEvent(const inventory_entry& entry)
+        : GuiEvent("overlay_interaction"), entry_(entry) {}
+
+    std::string getEventTypeName() const override { return "inventory_overlay_forwarded_click"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<InventoryOverlayForwardedClickEvent>(entry_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const inventory_entry& getEntry() const { return entry_; }
+
+private:
+    inventory_entry entry_{};
+};
+
+class InventoryOverlayForwardedKeyEvent : public GuiEvent {
+public:
+    InventoryOverlayForwardedKeyEvent() : GuiEvent("overlay_interaction") {}
+    explicit InventoryOverlayForwardedKeyEvent(const SDL_KeyboardEvent& key_event)
+        : GuiEvent("overlay_interaction"), key_event_(key_event) {}
+
+    std::string getEventTypeName() const override { return "inventory_overlay_forwarded_key"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<InventoryOverlayForwardedKeyEvent>(key_event_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const SDL_KeyboardEvent& getKeyEvent() const { return key_event_; }
+
+private:
+    SDL_KeyboardEvent key_event_{};
+};
+
+class CharacterOverlayForwardedTabEvent : public GuiEvent {
+public:
+    CharacterOverlayForwardedTabEvent() : GuiEvent("overlay_interaction") {}
+    explicit CharacterOverlayForwardedTabEvent(std::string tab_id)
+        : GuiEvent("overlay_interaction"), tab_id_(std::move(tab_id)) {}
+
+    std::string getEventTypeName() const override { return "character_overlay_forwarded_tab"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<CharacterOverlayForwardedTabEvent>(tab_id_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const std::string& getTabId() const { return tab_id_; }
+
+private:
+    std::string tab_id_;
+};
+
+class CharacterOverlayForwardedRowEvent : public GuiEvent {
+public:
+    CharacterOverlayForwardedRowEvent() : GuiEvent("overlay_interaction") {}
+    CharacterOverlayForwardedRowEvent(std::string tab_id, int row_index)
+        : GuiEvent("overlay_interaction"), tab_id_(std::move(tab_id)), row_index_(row_index) {}
+
+    std::string getEventTypeName() const override { return "character_overlay_forwarded_row"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<CharacterOverlayForwardedRowEvent>(tab_id_, row_index_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    const std::string& getTabId() const { return tab_id_; }
+    int getRowIndex() const { return row_index_; }
+
+private:
+    std::string tab_id_;
+    int row_index_ = 0;
+};
+
+enum class CharacterCommand;
+
+class CharacterOverlayForwardedCommandEvent : public GuiEvent {
+public:
+    CharacterOverlayForwardedCommandEvent() : GuiEvent("overlay_interaction") {}
+    explicit CharacterOverlayForwardedCommandEvent(CharacterCommand command)
+        : GuiEvent("overlay_interaction"), command_(command) {}
+
+    std::string getEventTypeName() const override { return "character_overlay_forwarded_command"; }
+    std::unique_ptr<Event> clone() const override {
+        auto cloned = std::make_unique<CharacterOverlayForwardedCommandEvent>(command_);
+        cloned->setSource(getSource());
+        return cloned;
+    }
+
+    CharacterCommand getCommand() const { return command_; }
+
+private:
+    CharacterCommand command_ = CharacterCommand::HELP;
 };
 
 class CharacterTabRequestedEvent : public GuiEvent {
