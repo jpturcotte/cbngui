@@ -549,6 +549,8 @@ private:
     int row_index_ = 0;
 };
 
+enum class CharacterCommand;
+
 class CharacterOverlayForwardedCommandEvent : public GuiEvent {
 public:
     CharacterOverlayForwardedCommandEvent() : GuiEvent("overlay_interaction") {}
