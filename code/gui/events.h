@@ -549,7 +549,12 @@ private:
     int row_index_ = 0;
 };
 
-enum class CharacterCommand;
+enum class CharacterCommand {
+    RENAME,
+    CONFIRM,
+    QUIT,
+    HELP,
+};
 
 class CharacterOverlayForwardedCommandEvent : public GuiEvent {
 public:
@@ -606,13 +611,6 @@ public:
 private:
     std::string tab_id_;
     int row_index_;
-};
-
-enum class CharacterCommand {
-    RENAME,
-    CONFIRM,
-    QUIT,
-    HELP,
 };
 
 class CharacterCommandEvent : public GuiEvent {

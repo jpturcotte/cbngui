@@ -1,4 +1,5 @@
 #include "event_bus.h"
+#include "events.h"
 #include <iostream>
 
 namespace cataclysm {
@@ -16,46 +17,40 @@ void EventBus::publishDynamic(const std::unique_ptr<Event>& event) {
         return;
     }
 
-    const std::type_index type_index(typeid(*event));
-    std::vector<std::shared_ptr<EventSubscription>> subscriptions_copy;
-
-    {
-        std::lock_guard<std::mutex> lock(subscriptions_mutex_);
-        auto it = subscriptions_.find(type_index);
-        if (it == subscriptions_.end()) {
-            return;
-        }
-        subscriptions_copy = it->second;
+#define PUBLISH_IF_TYPE(event_type)                           \
+    if (auto* derived = dynamic_cast<const event_type*>(event.get())) { \
+        publish<event_type>(*derived);                       \
+        return;                                              \
     }
 
-    for (const auto& subscription : subscriptions_copy) {
-        if (subscription && subscription->isActive()) {
-            try {
-                // Dynamic dispatch not implemented; prefer typed publish.
-            } catch (const std::exception& e) {
-                std::cerr << "Error publishing dynamic event: " << e.what() << std::endl;
-            }
-        }
-    }
+    // Shim dynamic events into the strongly-typed publish path so callers that
+    // only know about the base Event interface can still notify subscribers.
+    PUBLISH_IF_TYPE(UiOverlayOpenEvent);
+    PUBLISH_IF_TYPE(UiOverlayCloseEvent);
+    PUBLISH_IF_TYPE(UiFilterAppliedEvent);
+    PUBLISH_IF_TYPE(UiItemSelectedEvent);
+    PUBLISH_IF_TYPE(GameplayStatusChangeEvent);
+    PUBLISH_IF_TYPE(GameplayInventoryChangeEvent);
+    PUBLISH_IF_TYPE(GameplayNoticeEvent);
+    PUBLISH_IF_TYPE(UiDataBindingUpdateEvent);
+    PUBLISH_IF_TYPE(PerformanceMetricsUpdateEvent);
+    PUBLISH_IF_TYPE(MapTileHoveredEvent);
+    PUBLISH_IF_TYPE(MapTileClickedEvent);
+    PUBLISH_IF_TYPE(InventoryItemClickedEvent);
+    PUBLISH_IF_TYPE(InventoryKeyInputEvent);
+    PUBLISH_IF_TYPE(InventoryOverlayForwardedClickEvent);
+    PUBLISH_IF_TYPE(InventoryOverlayForwardedKeyEvent);
+    PUBLISH_IF_TYPE(CharacterOverlayForwardedTabEvent);
+    PUBLISH_IF_TYPE(CharacterOverlayForwardedRowEvent);
+    PUBLISH_IF_TYPE(CharacterOverlayForwardedCommandEvent);
+    PUBLISH_IF_TYPE(CharacterTabRequestedEvent);
+    PUBLISH_IF_TYPE(CharacterRowActivatedEvent);
+    PUBLISH_IF_TYPE(CharacterCommandEvent);
 
-    {
-        std::lock_guard<std::mutex> lock(subscriptions_mutex_);
-        auto it = subscriptions_.find(type_index);
-        if (it == subscriptions_.end()) {
-            return;
-        }
-
-        auto& stored = it->second;
-        stored.erase(
-            std::remove_if(stored.begin(), stored.end(),
-                           [](const auto& sub) { return !sub || !sub->isActive(); }),
-            stored.end());
-
-        if (stored.empty()) {
-            subscriptions_.erase(it);
-        }
-    }
+    std::cerr << "EventBus::publishDynamic received unknown event type '"
+              << event->getEventType() << "'" << std::endl;
 }
+#undef PUBLISH_IF_TYPE
 
 void EventBus::unsubscribeInternal(const std::type_index& event_type) {
     auto it = subscriptions_.find(event_type);
