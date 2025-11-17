@@ -5,6 +5,7 @@
 #include "overlay_interaction_bridge.h"
 #include "mock_events.h"
 #include "InventoryWidget.h"
+#include "CharacterWidget.h"
 #include "ui_adaptor.h"
 #include "ui_manager.h"
 #include <algorithm>
@@ -531,9 +532,9 @@ bool OverlayManager::HandleEvent(const SDL_Event& event) {
                     // Allow application lifecycle events to propagate so the main loop can respond.
                     return false;
                 default:
-                    // Modal overlays consume all other input while focused, even if no widget explicitly
-                    // handled it.
-                    return true;
+                    // Modal overlays only consume events that a widget or the renderer handled; allow
+                    // other events to propagate to the game loop.
+                    return overlay_consumed;
             }
         }
 
